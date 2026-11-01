@@ -1,15 +1,20 @@
 --!strict
--- Client entry point: feeds the StateStore from the Remotes. TODO(phase 7): mount the UI.
+-- Client entry point: feeds the StateStore from the Remotes and mounts the interface.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StateStore = require(script.Parent.StateStore)
+local Actions = require(script.Parent.UI.Actions)
+local Root = require(script.Parent.UI.Root)
 
 print("[Brainrot Battlers] client booted")
 
 local remotes = ReplicatedStorage:WaitForChild("BattlersNet")
 local stateUpdate = remotes:WaitForChild("StateUpdate") :: RemoteEvent
 local phaseChanged = remotes:WaitForChild("PhaseChanged") :: RemoteEvent
+local combatEvents = remotes:WaitForChild("CombatEvents") :: RemoteEvent
 local toast = remotes:WaitForChild("Toast") :: RemoteEvent
+
+Actions.init(remotes:WaitForChild("Action") :: RemoteFunction)
 
 stateUpdate.OnClientEvent:Connect(function(snapshot)
 	StateStore.setSnapshot(snapshot)
@@ -17,9 +22,14 @@ end)
 
 phaseChanged.OnClientEvent:Connect(function(phase, roundId, endsAt)
 	StateStore.setPhase(phase, roundId, endsAt)
-	print(("[Brainrot Battlers] %s %s"):format(roundId, phase))
+end)
+
+combatEvents.OnClientEvent:Connect(function(batch)
+	StateStore.combat:fire(batch)
 end)
 
 toast.OnClientEvent:Connect(function(reason)
-	warn("[Brainrot Battlers] " .. tostring(reason)) -- TODO(phase 7): show as an on-screen toast (UI-05)
+	StateStore.toast:fire(reason)
 end)
+
+Root.build()

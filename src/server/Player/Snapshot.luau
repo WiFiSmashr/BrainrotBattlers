@@ -61,6 +61,7 @@ function Snapshot.build(match: any, userId: number): { [string]: any }
 		place = match.placements[userId],
 		offer = if offer then { kind = offer.kind, choices = offer.choices, rerolled = offer.rerolled } else nil,
 		carousel = carousel,
+		income = state.lastIncome,
 	}
 end
 

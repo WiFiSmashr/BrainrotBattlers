@@ -211,7 +211,9 @@ local function enterPrep(self: any, at: number)
 		state.rerollsThisRound = 0
 		LevelService.grantPassive(state, info.global) -- LVL-02
 		local modifiers = if self.deps.incomeModifiers then self.deps.incomeModifiers(state) else nil
-		self.events.income:fire(id, EconomyService.payIncome(state, info.global, modifiers)) -- ECON-02
+		local breakdown = EconomyService.payIncome(state, info.global, modifiers) -- ECON-02
+		state.lastIncome = { round = info.id, base = breakdown.base, interest = breakdown.interest, streak = breakdown.streak, win = breakdown.win, extras = breakdown.extras, total = breakdown.total }
+		self.events.income:fire(id, breakdown)
 		if self.deps.onPrepStart then
 			self.deps.onPrepStart(state)
 		end

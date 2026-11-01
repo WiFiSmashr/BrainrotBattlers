@@ -66,6 +66,7 @@ function CombatSim.new(setup: Setup): any
 		table.insert(sim.roster, {
 			id = u.id, team = u.team, name = u.name, defId = u.defId, token = u.isToken,
 			col = u.cell.col, row = u.cell.row, hp = u.health, maxHp = StatBlock.get(u.stats.maxHealth),
+			mana = u.mana, maxMana = u.maxMana,
 		})
 	end
 	for _, u in sim.units do
@@ -299,7 +300,7 @@ local function act(self: any, unit: Unit)
 		if now + EPS >= unit.attackReadyAt then
 			unit.attackReadyAt = now + 1 / attackSpeed(unit, now)
 			SimEvents.gainMana(unit, CombatConfig.manaPerAttack)
-			self:emit("Attack", { unit = unit.id, target = target.id })
+			self:emit("Attack", { unit = unit.id, target = target.id, mana = unit.mana })
 			self:queueDamage({
 				source = unit, target = target, amount = StatBlock.get(unit.stats.ad),
 				damageType = "Physical", isAuto = true, canCrit = true,

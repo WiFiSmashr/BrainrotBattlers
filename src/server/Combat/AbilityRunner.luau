@@ -192,7 +192,7 @@ function AbilityRunner.begin(sim: any, unit: Unit, targets: { Unit })
 		table.insert(ids, t.id)
 	end
 	unit.castTargets = ids
-	sim:emit("Cast", { unit = unit.id, name = ability.name })
+	sim:emit("Cast", { unit = unit.id, name = ability.name, mana = 0 })
 end
 
 -- Executes an ability's effects at `scale` of full power (Glitch recasts use scale < 1).

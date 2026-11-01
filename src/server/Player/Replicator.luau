@@ -14,6 +14,8 @@ export type Remotes = {
 	Toast: RemoteEvent,
 }
 
+local RESYNC_SECONDS = 2
+
 local Replicator = {}
 Replicator.__index = Replicator
 
@@ -46,6 +48,15 @@ end
 function Replicator.flush(self: any)
 	local t = self.now()
 	local minGap = 1 / GameConfig.maxSnapshotsPerSecond
+	-- A client that connected late, or whose script started after the last change, would otherwise wait
+	-- for the next change. Re-send each seated player's state every few seconds as a heartbeat.
+	if self.match.phase ~= "Lobby" then
+		for _, userId in self.match.order do
+			if t - (self.lastSent[userId] or -math.huge) >= RESYNC_SECONDS then
+				self.dirty[userId] = true
+			end
+		end
+	end
 	for userId in self.dirty do
 		if t - (self.lastSent[userId] or -math.huge) >= minGap then
 			local player = Players:GetPlayerByUserId(userId)

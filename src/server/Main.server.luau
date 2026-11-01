@@ -11,6 +11,7 @@ local CombatRunner = require(script.Parent.Combat.CombatRunner)
 local CombatPlayback = require(script.Parent.Combat.CombatPlayback)
 local EffectRunner = require(script.Parent.Effects.EffectRunner)
 local InventoryService = require(script.Parent.Items.InventoryService)
+local BotController = require(script.Parent.Bots.BotController)
 
 -- Creates the Remotes folder (GDD 3.5). Clients wait for it by name.
 local function createRemotes(): Replicator.Remotes
@@ -42,7 +43,8 @@ local match = MatchService.new({
 	lobbySize = GameConfig.lobbySize,
 	seed = Random.new():NextInteger(1, 2147483646), -- match seed is chosen once, outside the simulation
 	combat = function(fight)
-		return CombatRunner.simulate(fight, true)
+		-- Only fights with a human in them are recorded for playback; bot-vs-bot fights are just simulated.
+		return CombatRunner.simulate(fight, fight.home.userId > 0 or (fight.away ~= nil and fight.away.userId > 0))
 	end,
 	onFight = CombatPlayback.play,
 	incomeModifiers = EffectRunner.incomeModifiers,
@@ -56,6 +58,7 @@ local match = MatchService.new({
 CombatPlayback.init(remotes.CombatEvents)
 local router = ActionRouter.new(match, now)
 local replicator = Replicator.new(match, remotes, now)
+local bots = BotController.new(match, router)
 
 remotes.Action.OnServerInvoke = function(player: Player, name: any, args: any)
 	return router:handle(player.UserId, name, args)
@@ -81,10 +84,14 @@ task.spawn(function()
 			local seated = #match.order
 			local waited = now() - lobbyOpenedAt
 			if seated >= GameConfig.lobbySize or (seated >= GameConfig.minPlayersToStart and waited >= GameConfig.lobbyWaitSeconds) then
+				if GameConfig.fillWithBots then
+					BotController.fill(match) -- BOT-01: bots take every empty seat
+				end
 				match:start()
 			end
 		else
 			match:update()
+			bots:update()
 		end
 		replicator:flush()
 		task.wait(0.1)

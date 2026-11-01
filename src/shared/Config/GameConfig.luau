@@ -36,6 +36,7 @@ local GameConfig = {
 
 	-- Lobby start (D-17): start when full, or after the wait with at least minPlayersToStart.
 	lobbyWaitSeconds = 10,
+	fillWithBots = true, -- BOT-01: bots fill empty seats when the match starts
 	minPlayersToStart = 1,
 	matchStartSeconds = 3,
 

@@ -98,7 +98,7 @@ local function resolveDamage(self: any, ev: any)
 	SimEvents.gainMana(target, CombatConfig.manaPerDamageTaken)
 	self:emit("Damage", {
 		target = target.id, source = if source then source.id else nil, amount = result.dealt,
-		hp = target.health, crit = result.crit, dtype = ev.damageType,
+		hp = target.health, crit = result.crit, dtype = ev.damageType, mana = target.mana,
 	})
 	if source then
 		self:fire("OnDamageDealt", {

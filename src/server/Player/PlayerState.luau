@@ -41,6 +41,7 @@ export type State = {
 	augmentOffer: Offer?, -- pending offer (AUG-01, AUG-02)
 	drops: { string }, -- the last component ids dropped to this player (ITM-11)
 	rerollsThisRound: number, -- for free rerolls
+	lastIncome: { [string]: any }?, -- the latest itemized income, shown by the UI for 2s (ECON-02)
 	lostLastPvp: boolean, -- true only if the round just played was a PvP loss
 	nextUid: number,
 }
