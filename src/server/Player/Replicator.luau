@@ -20,11 +20,14 @@ local Replicator = {}
 Replicator.__index = Replicator
 
 -- Wires match events to the Remotes. `now` is the server clock in seconds.
-function Replicator.new(match: any, remotes: Remotes, now: () -> number): any
+-- `watching` (optional) says which players still follow this match; others, such as a player who went
+-- back to the menu, are sent nothing.
+function Replicator.new(match: any, remotes: Remotes, now: () -> number, watching: ((userId: number) -> boolean)?): any
 	local self = setmetatable({
 		match = match,
 		remotes = remotes,
 		now = now,
+		watching = watching,
 		dirty = {} :: { [number]: boolean },
 		lastSent = {} :: { [number]: number },
 	}, Replicator)
@@ -33,7 +36,12 @@ function Replicator.new(match: any, remotes: Remotes, now: () -> number): any
 		self.dirty[userId] = true
 	end)
 	match.events.phaseChanged:connect(function(info: any)
-		remotes.PhaseChanged:FireAllClients(info.phase, info.roundId, info.endsAt)
+		for _, userId in match.order do
+			local player = Players:GetPlayerByUserId(userId)
+			if player and (not watching or watching(userId)) then
+				remotes.PhaseChanged:FireClient(player, info.phase, info.roundId, info.endsAt)
+			end
+		end
 	end)
 	match.events.toast:connect(function(userId: number, reason: string)
 		local player = Players:GetPlayerByUserId(userId)
@@ -60,7 +68,7 @@ function Replicator.flush(self: any)
 	for userId in self.dirty do
 		if t - (self.lastSent[userId] or -math.huge) >= minGap then
 			local player = Players:GetPlayerByUserId(userId)
-			if player and self.match:getPlayer(userId) then
+			if player and self.match:getPlayer(userId) and (not self.watching or self.watching(userId)) then
 				self.remotes.StateUpdate:FireClient(player, Snapshot.build(self.match, userId))
 			end
 			self.dirty[userId] = nil

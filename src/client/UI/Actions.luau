@@ -25,6 +25,19 @@ function Actions.send(name: string, args: { [string]: any }?)
 	end)
 end
 
+-- Menu actions (outside the GDD): queue for a match and return to the menu.
+function Actions.joinQueue()
+	Actions.send("JoinQueue")
+end
+
+function Actions.leaveQueue()
+	Actions.send("LeaveQueue")
+end
+
+function Actions.backToMenu()
+	Actions.send("BackToMenu")
+end
+
 -- Convenience wrappers named after the GDD 3.5 actions.
 function Actions.buyUnit(slot: number)
 	Actions.send("BuyUnit", { slot = slot })

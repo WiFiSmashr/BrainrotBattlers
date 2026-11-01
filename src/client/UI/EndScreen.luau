@@ -1,12 +1,11 @@
 --!strict
--- End screen: placement, a few stats and a Play Again button (GDD 12.2). It appears as soon as the
+-- End screen: placement, a few stats and a Back to Menu button (GDD 12.2 asked for Play Again; the menu replaces it, D-70). It appears as soon as the
 -- server gives this player a placement, whether they won or were eliminated.
 
-local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
 local Theme = require(script.Parent.Theme)
 local Components = require(script.Parent.Components)
-local Feedback = require(script.Parent.Feedback)
+local Actions = require(script.Parent.Actions)
 
 local EndScreen = {}
 
@@ -37,16 +36,10 @@ function EndScreen.build(parent: Instance): View
 		TextYAlignment = Enum.TextYAlignment.Top, TextXAlignment = Enum.TextXAlignment.Left, Parent = panel,
 	})
 	Components.button({
-		Size = UDim2.fromOffset(320, 76), AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -34), Text = "Play Again", TextSize = 36,
+		Size = UDim2.fromOffset(320, 76), AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -34), Text = "Back to Menu", TextSize = 36,
 		BackgroundColor3 = Theme.colors.good, TextColor3 = Color3.new(0, 0, 0), ZIndex = 102, Parent = panel,
 		onTap = function()
-			-- Rejoins a fresh server of this place. Teleports only work in a published game.
-			local ok = pcall(function()
-				TeleportService:Teleport(game.PlaceId, Players.LocalPlayer)
-			end)
-			if not ok then
-				Feedback.banner("Play Again works in the published game", Theme.colors.bad)
-			end
+			Actions.backToMenu()
 		end,
 	})
 

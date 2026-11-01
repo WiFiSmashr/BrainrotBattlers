@@ -13,6 +13,9 @@ export type Payload = { kind: string, [string]: any }
 export type TargetOptions = { accepts: (Payload) -> boolean, onDrop: (Payload) -> () }
 
 local DragController = {
+	-- Set by the 3D Prep view: called when something dragged from the HUD (an item) is released over no
+	-- HUD target, so it can be dropped onto a unit standing in the world.
+	worldDrop = nil :: ((payload: Payload, position: Vector2) -> ())?,
 	dragging = false,
 	finished = Signal.new() :: any, -- fired after a drag ends, so panels can re-render
 }
@@ -48,6 +51,17 @@ local function targetAt(position: Vector2, payload: Payload, ghost: GuiObject?):
 		end
 	end
 	return nil
+end
+
+-- Drops `payload` on whichever HUD target is under `position` (for example the shop). Returns true if a
+-- target took it. Used by the 3D Prep view when a unit in the world is released.
+function DragController.dropAt(position: Vector2, payload: Payload): boolean
+	local target = targetAt(position, payload, nil)
+	if target then
+		target.onDrop(payload)
+		return true
+	end
+	return false
 end
 
 local function finish()
@@ -120,6 +134,8 @@ UserInputService.InputEnded:Connect(function(input: InputObject)
 		local target = targetAt(Vector2.new(input.Position.X, input.Position.Y), a.payload, a.ghost)
 		if target then
 			target.onDrop(a.payload)
+		elseif DragController.worldDrop then
+			DragController.worldDrop(a.payload, Vector2.new(input.Position.X, input.Position.Y))
 		end
 		finish()
 	else

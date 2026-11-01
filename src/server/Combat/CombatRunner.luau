@@ -6,14 +6,13 @@ local Shared = game:GetService("ReplicatedStorage").Shared
 local Index = require(Shared.Util.Index)
 local PlayerState = require(script.Parent.Parent.Player.PlayerState)
 local PveBoards = require(script.Parent.Parent.Match.PveBoards)
+local ArenaLayout = require(Shared.Util.ArenaLayout)
 local FightTypes = require(script.Parent.Parent.Match.FightTypes)
 local Registry = require(script.Parent.Parent.Effects.Abilities.Registry)
 local EffectRunner = require(script.Parent.Parent.Effects.EffectRunner)
 local CombatSim = require(script.Parent.CombatSim)
 local SimTypes = require(script.Parent.SimTypes)
 
--- Monsters fill the front rows from the centre outwards (own-board coordinates, row 4 = front).
-local MONSTER_COLUMNS = { 4, 3, 5, 2, 6, 1, 7 }
 
 local CombatRunner = {}
 
@@ -49,7 +48,7 @@ function CombatRunner.monsterTeam(globalRound: number): { SimTypes.UnitSpec }
 	for i, m in PveBoards.build(globalRound) do
 		table.insert(team, {
 			name = "Monster", archetype = m.archetype, star = 1,
-			cell = { col = MONSTER_COLUMNS[(i - 1) % #MONSTER_COLUMNS + 1], row = 4 - math.floor((i - 1) / #MONSTER_COLUMNS) },
+			cell = ArenaLayout.monsterCell(i), -- the same cells the Prep preview shows
 			health = m.health, ad = m.ad, attackSpeed = m.attackSpeed,
 		})
 	end

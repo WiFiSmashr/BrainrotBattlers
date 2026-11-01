@@ -32,6 +32,7 @@ function EconomyBar.build(parent: Instance): View
 	local level = Components.label({ Size = UDim2.fromOffset(150, 44), Position = UDim2.fromOffset(240, 6), Text = "Lv 1", TextSize = 38, TextXAlignment = Enum.TextXAlignment.Left, Parent = frame })
 	local xp = Components.bar({ Size = UDim2.fromOffset(520, 30), Position = UDim2.fromOffset(240, 54), fillColor = Theme.colors.mana, Parent = frame, TextSize = 20 })
 	local streak = Components.label({ Size = UDim2.fromOffset(300, 60), Position = UDim2.new(1, -316, 0, 18), Text = "", TextSize = 32, TextXAlignment = Enum.TextXAlignment.Right, Parent = frame })
+	local counters = Components.label({ Size = UDim2.fromOffset(330, 30), Position = UDim2.new(1, -346, 0, 58), Text = "", TextSize = 22, TextXAlignment = Enum.TextXAlignment.Right, Parent = frame })
 
 	local function render(snapshot: { [string]: any })
 		gold.Text = tostring(snapshot.gold)
@@ -49,6 +50,19 @@ function EconomyBar.build(parent: Instance): View
 		else
 			xp.set(1, "MAX LEVEL")
 		end
+
+		-- Board and bench fill, always visible at a glance (12.4).
+		local onBoard, onBench = 0, 0
+		for _, unit in snapshot.units do
+			if unit.b then
+				onBench += 1
+			else
+				onBoard += 1
+			end
+		end
+		local boardFull, benchFull = onBoard >= snapshot.level, onBench >= GameConfig.benchSlots
+		counters.Text = ("Units %d/%d%s   Bench %d/%d%s"):format(onBoard, snapshot.level, if boardFull then " FULL" else "", onBench, GameConfig.benchSlots, if benchFull then " FULL" else "")
+		counters.TextColor3 = if boardFull or benchFull then Theme.colors.accent else Theme.colors.text
 
 		local s = snapshot.streak
 		if s.k == "none" or s.n < 2 then

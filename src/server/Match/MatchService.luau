@@ -9,6 +9,7 @@ local Units = require(Shared.Data.Units)
 local Signal = require(Shared.Util.Signal)
 local Rng = require(Shared.Util.Rng)
 local PlayerState = require(script.Parent.Parent.Player.PlayerState)
+local AutoPlace = require(script.Parent.Parent.Player.AutoPlace)
 local EconomyService = require(script.Parent.Parent.Economy.EconomyService)
 local LevelService = require(script.Parent.Parent.Economy.LevelService)
 local ShopService = require(script.Parent.Parent.Economy.ShopService)
@@ -128,6 +129,9 @@ end
 function Match.start(self: any)
 	assert(self.phase == "Lobby" and #self.order >= 1, "cannot start")
 	self.startCount = #self.order
+	for seat, id in self.order do
+		self.players[id].seat = seat -- each player owns the plot for their seat (ArenaLayout.plotOrigin)
+	end
 	for _, id in self.order do
 		ShopService.grantStarterUnit(self.players[id], self.pool, self.shopRng)
 	end
@@ -263,6 +267,12 @@ local function runFight(self: any, fight: FightTypes.Fight): FightTypes.Outcome
 end
 
 local function enterCombat(self: any, at: number)
+	-- Fill free board slots from the bench before anything is simulated (D-75).
+	for _, id in Match.livingIds(self) do
+		if AutoPlace.fill(self.players[id]) > 0 then
+			self.events.stateChanged:fire(id)
+		end
+	end
 	local info = self.info
 	local pending: { Pending } = {}
 	local longest = 1

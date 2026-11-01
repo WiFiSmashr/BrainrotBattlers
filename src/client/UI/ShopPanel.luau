@@ -11,6 +11,8 @@ local Theme = require(script.Parent.Theme)
 local Components = require(script.Parent.Components)
 local Actions = require(script.Parent.Actions)
 local UnitPortrait = require(script.Parent.UnitPortrait)
+local Selection = require(script.Parent.Selection)
+local DragController = require(script.Parent.DragController)
 
 local SLOT_WIDTH, SLOT_HEIGHT, GAP = 200, 200, 8
 local BUTTON_WIDTH = 150
@@ -35,6 +37,21 @@ function ShopPanel.build(parent: Instance): View
 	local frame = Components.create("Frame", {
 		Name = "ShopPanel", Size = UDim2.fromOffset(width, SLOT_HEIGHT), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 722),
 		BackgroundTransparency = 1, Parent = parent,
+	})
+
+	-- Dragging a unit from the world onto the shop sells it (D-67). The unit card has a Sell button too.
+	DragController.registerTarget(frame, {
+		accepts = function(payload)
+			return payload.kind == "unit"
+		end,
+		onDrop = function(payload)
+			Selection.selectUnit(nil)
+			Actions.sellUnit(payload.uid)
+		end,
+	})
+	Components.label({
+		Size = UDim2.fromOffset(width, 22), Position = UDim2.fromOffset(0, -24), Text = "Drag a unit onto the shop to sell it", TextSize = 16,
+		TextColor3 = Theme.colors.textDim, Font = Theme.fontBody, TextStrokeTransparency = 0.5, Parent = frame,
 	})
 
 	local reroll = Components.button({ Size = UDim2.fromOffset(BUTTON_WIDTH, 60), Position = UDim2.fromOffset(0, 0), Text = "Reroll (" .. EconomyConfig.rerollCost .. ")", TextSize = 26, onTap = Actions.rerollShop, Parent = frame })

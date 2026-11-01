@@ -27,6 +27,7 @@ export type Shop = { slots: { string | boolean }, locked: boolean } -- false = e
 export type State = {
 	userId: number,
 	name: string,
+	seat: number, -- 1-indexed seat in the lobby; decides which plot the player owns (ArenaLayout.plotOrigin)
 	gold: number,
 	xp: number,
 	level: number,
@@ -57,6 +58,7 @@ function PlayerState.new(userId: number, name: string): State
 	return {
 		userId = userId,
 		name = name,
+		seat = 0,
 		gold = 0,
 		xp = 0,
 		level = 1,

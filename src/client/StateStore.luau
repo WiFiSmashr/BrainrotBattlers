@@ -11,6 +11,7 @@ local StateStore = {
 	changed = Signal.new() :: any, -- fired after every snapshot or phase change
 	toast = Signal.new() :: any, -- reason code
 	combat = Signal.new() :: any, -- a batch of combat events
+	menu = { status = "Menu", queued = 0, needed = 8, startsAt = nil :: number?, matchRunning = false } :: { [string]: any },
 	userId = Players.LocalPlayer.UserId,
 }
 
@@ -43,12 +44,27 @@ end
 -- connects late still shows the right round and timer.
 function StateStore.setSnapshot(snapshot: { [string]: any })
 	StateStore.snapshot = snapshot
+	StateStore.menu.status = "InMatch" -- a snapshot means the server has this player in a match
 	local phase = StateStore.phase
 	if phase.name ~= snapshot.phase or phase.roundId ~= snapshot.round then
 		StateStore.phase = { name = snapshot.phase, roundId = snapshot.round, endsAt = snapshot.endsAt, receivedAt = StateStore.serverNow() }
 	else
 		phase.endsAt = snapshot.endsAt
 	end
+	StateStore.changed:fire()
+end
+
+-- Records the menu status from the server (Menu, Queued or InMatch). Leaving a match drops its
+-- snapshot, so the interface falls back to the menu.
+function StateStore.setMenu(info: { [string]: any })
+	local wasInMatch = StateStore.menu.status == "InMatch"
+	if wasInMatch and info.status ~= "InMatch" then
+		StateStore.snapshot = nil
+		StateStore.phase = { name = "Lobby", roundId = "1-1", endsAt = nil, receivedAt = StateStore.serverNow() }
+	elseif info.status == "InMatch" and StateStore.snapshot == nil then
+		-- Nothing to draw until the first snapshot; the heartbeat delivers it within a moment.
+	end
+	StateStore.menu = info
 	StateStore.changed:fire()
 end
 

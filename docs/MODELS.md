@@ -79,9 +79,10 @@ Training Pup) and `pet` (Pet Squad pets) are model ids too. Save `assets/models/
 
 - **The arena in the workspace** (`CombatPlayback`): units walk between cells, turn to face their target,
   play attack, cast and hit animations, and play their death animation before they are removed.
-- **Shop, bench, board and the unit card:** a still 3D portrait replaces the coloured tile.
-- **Not yet:** the combat screen the player normally watches is the 2D view (decision D-44), which does
-  not show models. Switching combat to the 3D arena is a separate step.
+- **Your board and bench in Prep:** your units stand in the 3D world (client-side models with their idle
+  animation); the board is hidden during your own fight and the bench stays visible.
+- **Shop and the unit card:** a still 3D portrait replaces the coloured tile.
+- **The combat screen** is the 3D arena itself: the camera moves behind your side of the arena and your units' models fight there, with health and mana bars, names, status icons and damage numbers drawn over them in the world.
 
 ## Under the hood
 
@@ -94,4 +95,8 @@ Training Pup) and `pet` (Pet Squad pets) are model ids too. Save `assets/models/
 | Load asset-id models at server start | `src/server/Combat/ModelLoader.luau` |
 | Check a model by eye | `src/server/Combat/ModelPreview.luau` |
 | Drive the models during a fight | `src/server/Combat/CombatPlayback.luau` |
-| 2D portraits | `src/client/UI/UnitPortrait.luau` |
+| Portraits in the HUD | `src/client/UI/UnitPortrait.luau` |
+| The arena floor | `src/server/Combat/ArenaBuilder.luau` |
+| Your board, bench and monster preview in Prep | `src/client/View/PlotView.luau` |
+| Where things stand (plots, cells, bench slots) | `src/shared/Util/ArenaLayout.luau` |
+| Combat camera, bars and damage numbers | `src/client/View/CombatCamera.luau`, `src/client/View/CombatWorld.luau` |

@@ -43,6 +43,7 @@ function Components.panel(props: { [string]: any }): Frame
 	local p = table.clone(props)
 	p.BackgroundColor3 = p.BackgroundColor3 or Theme.colors.panel
 	p.BorderSizePixel = 0
+	p.Active = if p.Active == nil then true else p.Active -- a HUD panel swallows taps so they never reach the 3D world behind it
 	local radius, stroke = p.radius, p.stroke
 	p.radius, p.stroke = nil, nil
 	local frame = Components.create("Frame", p)

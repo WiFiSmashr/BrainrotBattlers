@@ -4,6 +4,7 @@
 
 local PlayerState = require(script.Parent.PlayerState)
 local CarouselService = require(script.Parent.Parent.Items.CarouselService)
+local PveBoards = require(script.Parent.Parent.Match.PveBoards)
 
 local Snapshot = {}
 
@@ -62,6 +63,8 @@ function Snapshot.build(match: any, userId: number): { [string]: any }
 		offer = if offer then { kind = offer.kind, choices = offer.choices, rerolled = offer.rerolled, rarity = offer.rarity } else nil,
 		carousel = carousel,
 		income = state.lastIncome,
+		seat = state.seat,
+		monsters = if match.info.type == "pve" then PveBoards.count(match.info.global) else nil, -- PvE preview (D-68)
 	}
 end
 

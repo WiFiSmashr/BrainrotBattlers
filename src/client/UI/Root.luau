@@ -4,6 +4,7 @@
 -- read the snapshot and the local Selection, and send intents through Actions.
 
 local Players = game:GetService("Players")
+local ArenaLayout = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared").Util.ArenaLayout)
 local Theme = require(script.Parent.Theme)
 local Components = require(script.Parent.Components)
 local StateStore = require(script.Parent.Parent.StateStore)
@@ -20,9 +21,11 @@ local AugmentPicker = require(script.Parent.AugmentPicker)
 local CarouselPanel = require(script.Parent.CarouselPanel)
 local IncomePopup = require(script.Parent.IncomePopup)
 local EndScreen = require(script.Parent.EndScreen)
+local MainMenu = require(script.Parent.MainMenu)
 local ToastLayer = require(script.Parent.ToastLayer)
-local BoardView = require(script.Parent.Parent.View.BoardView)
-local CombatView = require(script.Parent.Parent.View.CombatView)
+local PlotView = require(script.Parent.Parent.View.PlotView)
+local CombatCamera = require(script.Parent.Parent.View.CombatCamera)
+local CombatWorld = require(script.Parent.Parent.View.CombatWorld)
 
 local Root = {}
 
@@ -53,13 +56,10 @@ function Root.build()
 	relayout()
 
 	Feedback.init(root)
-	local waiting = Components.label({
-		Size = UDim2.fromScale(1, 0.2), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), TextSize = 56,
-		Text = "Waiting for players...", Parent = root,
-	})
+	local menu = MainMenu.build(root)
 
-	local board = BoardView.build(root)
-	local combat = CombatView.build(root)
+	local plot = PlotView.build()
+	local combat = CombatWorld.build()
 	local panels = {
 		TopBar.build(root), EconomyBar.build(root), ShopPanel.build(root), TraitPanel.build(root), InventoryPanel.build(root),
 		UnitCard.build(root), CarouselPanel.build(root), IncomePopup.build(root), AugmentPicker.build(root), EndScreen.build(root),
@@ -73,7 +73,7 @@ function Root.build()
 	local pending = false
 
 	local function renderAll()
-		if DragController.dragging then
+		if DragController.dragging or plot.dragging() then
 			pending = true -- re-rendering would destroy the thing being dragged
 			return
 		end
@@ -82,8 +82,14 @@ function Root.build()
 		local phase = StateStore.phase.name
 
 		if snapshot ~= lastSnapshot then
-			Feedback.observe(lastSnapshot, snapshot :: any, StateStore.userId)
-			lastSnapshot = snapshot
+			local previous = lastSnapshot
+			lastSnapshot = snapshot -- set first: clearing the selection re-enters renderAll
+			if snapshot then
+				Feedback.observe(previous, snapshot, StateStore.userId)
+			else
+				lastPhase = "Lobby"
+				Selection.clear() -- back at the menu: nothing stays selected
+			end
 		end
 		if phase ~= lastPhase then
 			local old = lastPhase
@@ -94,14 +100,16 @@ function Root.build()
 			end
 		end
 
-		waiting.Visible = snapshot == nil
+		menu.render()
 		topBar.render(snapshot)
 		for _, panel in always do
 			panel.frame.Visible = snapshot ~= nil
 		end
 		if not snapshot then
-			board.frame.Visible = false
-			combat.hide()
+			root.BackgroundTransparency = 0
+			combat.setActive(false)
+			CombatCamera.exit()
+			plot.render({ units = {}, items = {}, players = {}, seat = 1 })
 			return
 		end
 		for _, panel in panels do
@@ -109,21 +117,24 @@ function Root.build()
 				panel.render(snapshot)
 			end
 		end
-		-- The 3D playback lives in the workspace; this 2D view is the player-facing combat overlay. The
-		-- bench stays on screen during combat so purchases are visible.
+		-- The world is always on screen once the match runs. Outside your own fight the camera sits over
+		-- your plot (Prep, bench, board, monsters); in Combat CombatWorld moves it to the fight arena.
 		local inCombat = phase == "Combat"
-		board.frame.Visible = true
-		board.setCombat(inCombat)
-		board.render(snapshot)
-		if inCombat then
-			combat.show()
-		else
-			combat.hide()
+		root.BackgroundTransparency = 1
+		if not inCombat then
+			CombatCamera.enter(ArenaLayout.plotOrigin(snapshot.seat), true)
 		end
+		plot.render(snapshot)
+		combat.setActive(inCombat)
 	end
 
 	StateStore.changed:connect(renderAll)
 	Selection.changed:connect(renderAll)
+	plot.dragFinished:connect(function()
+		if pending then
+			renderAll()
+		end
+	end)
 	DragController.finished:connect(function()
 		if pending then
 			renderAll()
