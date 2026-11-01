@@ -137,7 +137,8 @@ function TopBar.build(parent: Instance): View
 			local mine = p.id == StateStore.userId
 			local card = Components.panel({
 				Size = UDim2.fromOffset(cardWidth - 4, 82), BackgroundColor3 = if out then Color3.fromRGB(40, 40, 46) else Theme.colors.panel,
-				radius = 8, stroke = if mine then Theme.colors.accent else nil, LayoutOrder = p.id, Parent = list,
+				radius = 8, stroke = if mine then Theme.colors.accent elseif StateStore.scouting == p.id then Theme.colors.good else nil,
+				LayoutOrder = p.id, Parent = list,
 			})
 			Components.label({
 				Size = UDim2.new(1, -8, 0, 26), Position = UDim2.fromOffset(6, 2), Text = if out then ("#%d %s"):format(p.place, p.n) else p.n,
@@ -158,6 +159,12 @@ function TopBar.build(parent: Instance): View
 				})
 				icon.Name = augmentId
 			end
+			-- Clicking a player shows their board (clicking again, or your own name, goes back).
+			Components.create("TextButton", {
+				Name = "Scout", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", ZIndex = 5, Parent = card,
+			}).Activated:Connect(function()
+				StateStore.setScouting(p.id)
+			end)
 		end
 	end
 

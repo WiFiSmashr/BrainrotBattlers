@@ -32,8 +32,23 @@ function Snapshot.build(match: any, userId: number): { [string]: any }
 	local scoreboard = {}
 	for _, id in match.order do
 		local p = match:getPlayer(id)
+		-- Boards and benches are public so anyone can scout them (D-79): [{ d = unit id, s = stars, c, r (board) or b (bench slot), i = { item ids } }].
+		local board = {}
+		for _, u in PlayerState.sortedUnits(p) do
+			if u.board or u.bench then
+				local carried = {}
+				for _, item in p.inventory do
+					if item.equippedTo == u.uid then
+						table.insert(carried, item.itemId)
+					end
+				end
+				table.insert(board, { d = u.defId, s = u.star, c = if u.board then u.board.col else nil, r = if u.board then u.board.row else nil, b = u.bench, i = carried })
+			end
+		end
 		-- Chosen augments are public: shown beside each portrait (AUG-08).
-		table.insert(scoreboard, { id = id, n = p.name, hp = p.health, place = match.placements[id], aug = p.augments })
+		table.insert(scoreboard, {
+			id = id, n = p.name, hp = p.health, place = match.placements[id], aug = p.augments, seat = p.seat, board = board,
+		})
 	end
 
 	local offer = state.augmentOffer

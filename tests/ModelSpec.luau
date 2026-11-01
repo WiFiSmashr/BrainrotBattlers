@@ -139,6 +139,27 @@ return function(t)
 		template:Destroy()
 	end)
 
+	t.test("a model saved lying down is stood up by its rotation entry and stands on the ground", function()
+		local model = Instance.new("Model")
+		model.Name = "zz_lying_model"
+		local body = Instance.new("Part") -- 6 studs long along Z: lying on its face
+		body.Size = Vector3.new(2, 1, 6)
+		body.Parent = model
+		model.PrimaryPart = body
+		model.Parent = templates()
+		ModelRegistry.register({ id = "zz_lying_model", rotation = Vector3.new(90, 0, 0) })
+		local visual = ModelFactory.create("zz_lying_model", { height = 4 })
+		visual:place(Vector3.new(10, 0, 5), Vector3.new(10, 0, 50))
+		local part = visual.model:FindFirstChildWhichIsA("BasePart") :: BasePart
+		-- Upright: the long side is now vertical, the part is 4 studs tall in the world and rests on y = 0.
+		t.near(part.Position.Y - part.Size.Z / 2, 0, 0.05, "the feet touch y = 0")
+		t.near(part.Size.Z, 4, 0.05, "scaled to the standard height")
+		t.truthy(math.abs(part.CFrame.UpVector:Dot(Vector3.new(0, 1, 0))) < 0.01, "the part's own up axis is horizontal")
+		visual:destroy()
+		ModelRegistry.unregister("zz_lying_model")
+		model:Destroy()
+	end)
+
 	t.test("a model of unjoined parts is fully anchored so it holds together", function()
 		local model = Instance.new("Model")
 		model.Name = "zz_static_model"

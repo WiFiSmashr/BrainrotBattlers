@@ -67,6 +67,7 @@ export type ModelDef = {
 	assetId: number?, -- Roblox asset id of a Model, loaded into UnitModels at server start when no template exists
 	scale: number?, -- size multiplier on top of the standard unit height (default 1)
 	facing: number?, -- yaw in degrees to turn the model so its front faces forward (default 0)
+	rotation: Vector3?, -- degrees about the world X, Y, Z axes that stand up a model saved lying down (default none)
 	animations: AnimationSet?, -- this model's animations; missing states use the shared defaults
 }
 

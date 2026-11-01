@@ -9,12 +9,17 @@
 -- back line.
 
 local Grid = require(script.Parent.Grid)
+local GameConfig = require(script.Parent.Parent.Config.GameConfig)
 
-local CELL_STUDS = 4
-local ARENA_SPACING = 500 -- distance between plot centres along X: far enough that no plot is ever in view of another
+local CELL_WIDTH = 6 -- studs along X: wider than deep so the arena fills more of a wide screen
+local CELL_DEPTH = 4 -- studs along Z
+-- Plots sit on a square grid centred on the baseplate (2048 x 2048 studs), 600 studs apart so no plot is
+-- ever in view of another. Seats fill the grid row by row.
+local PLOT_SPACING = 600
+local GRID_COLUMNS = math.ceil(math.sqrt(GameConfig.lobbySize))
 local COLUMNS, ROWS = 7, 8
 local BENCH_SLOTS = 9
-local BENCH_SPACING = 3.1 -- 9 slots fit inside the 28-stud arena width
+local BENCH_SPACING = 4.6 -- 9 slots fit inside the 42-stud arena width
 local BENCH_OFFSET = 22 -- studs from the arena centre to the bench row (the arena edge is at 16)
 -- The tile tops are one stud above y = 0, so the board never sits level with a baseplate or other floor
 -- the place might contain (which hides the squares and makes them flicker).
@@ -25,24 +30,31 @@ local MONSTER_COLUMNS = { 4, 3, 5, 2, 6, 1, 7 }
 
 local ArenaLayout = {}
 
-ArenaLayout.cellStuds = CELL_STUDS
+ArenaLayout.cellWidth = CELL_WIDTH
+ArenaLayout.cellDepth = CELL_DEPTH
 ArenaLayout.benchSlots = BENCH_SLOTS
 ArenaLayout.benchOffset = BENCH_OFFSET
 ArenaLayout.groundY = GROUND_Y -- height of the tile tops, where units stand
 
 -- Centre of the plot for the nth seated player (1-indexed).
 function ArenaLayout.plotOrigin(seat: number): Vector3
-	return Vector3.new((seat - 1) * ARENA_SPACING, 0, 0)
+	local rows = math.ceil(GameConfig.lobbySize / GRID_COLUMNS)
+	local column = (seat - 1) % GRID_COLUMNS
+	local row = (seat - 1) // GRID_COLUMNS
+	return Vector3.new((column - (GRID_COLUMNS - 1) / 2) * PLOT_SPACING, 0, (row - (rows - 1) / 2) * PLOT_SPACING)
 end
 
 -- The seat (1-indexed) whose plot is centred at `origin`.
 function ArenaLayout.seatAt(origin: Vector3): number
-	return math.floor(origin.X / ARENA_SPACING + 0.5) + 1
+	local rows = math.ceil(GameConfig.lobbySize / GRID_COLUMNS)
+	local column = math.floor(origin.X / PLOT_SPACING + (GRID_COLUMNS - 1) / 2 + 0.5)
+	local row = math.floor(origin.Z / PLOT_SPACING + (rows - 1) / 2 + 0.5)
+	return row * GRID_COLUMNS + column + 1
 end
 
 -- Ground position of an arena cell (col 1 to 7, row 1 to 8) on a plot.
 function ArenaLayout.cellPosition(origin: Vector3, col: number, row: number): Vector3
-	return origin + Vector3.new((4 - col) * CELL_STUDS, GROUND_Y, (row - 4.5) * CELL_STUDS)
+	return origin + Vector3.new((4 - col) * CELL_WIDTH, GROUND_Y, (row - 4.5) * CELL_DEPTH)
 end
 
 -- Ground position of a bench slot on the home side (rows 1 to 4, z < 0) or the away side (z > 0).

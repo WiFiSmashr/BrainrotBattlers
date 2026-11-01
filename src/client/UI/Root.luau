@@ -26,6 +26,7 @@ local ToastLayer = require(script.Parent.ToastLayer)
 local PlotView = require(script.Parent.Parent.View.PlotView)
 local CombatCamera = require(script.Parent.Parent.View.CombatCamera)
 local CombatWorld = require(script.Parent.Parent.View.CombatWorld)
+local ScoutView = require(script.Parent.Parent.View.ScoutView)
 
 local Root = {}
 
@@ -60,6 +61,7 @@ function Root.build()
 
 	local plot = PlotView.build()
 	local combat = CombatWorld.build()
+	local scout = ScoutView.build(root)
 	local panels = {
 		TopBar.build(root), EconomyBar.build(root), ShopPanel.build(root), TraitPanel.build(root), InventoryPanel.build(root),
 		UnitCard.build(root), CarouselPanel.build(root), IncomePopup.build(root), AugmentPicker.build(root), EndScreen.build(root),
@@ -70,6 +72,7 @@ function Root.build()
 
 	local lastSnapshot: { [string]: any }? = nil
 	local lastPhase = "Lobby"
+	local lastScouting: number? = nil
 	local pending = false
 
 	local function renderAll()
@@ -80,6 +83,13 @@ function Root.build()
 		pending = false
 		local snapshot = StateStore.snapshot
 		local phase = StateStore.phase.name
+		if phase == "Combat" or phase == "MatchEnd" then
+			StateStore.scouting = nil -- the fight camera takes over (D-79)
+		end
+		if StateStore.scouting ~= lastScouting then
+			lastScouting = StateStore.scouting -- set first: clearing the selection re-enters renderAll
+			Selection.clear()
+		end
 
 		if snapshot ~= lastSnapshot then
 			local previous = lastSnapshot
@@ -109,6 +119,8 @@ function Root.build()
 			root.BackgroundTransparency = 0
 			combat.setActive(false)
 			CombatCamera.exit()
+			StateStore.scouting = nil
+			scout.render(nil)
 			plot.render({ units = {}, items = {}, players = {}, seat = 1 })
 			return
 		end
@@ -121,10 +133,13 @@ function Root.build()
 		-- your plot (Prep, bench, board, monsters); in Combat CombatWorld moves it to the fight arena.
 		local inCombat = phase == "Combat"
 		root.BackgroundTransparency = 1
+		local who = scout.target(snapshot) -- another player's board being looked at (D-79)
 		if not inCombat then
-			CombatCamera.enter(ArenaLayout.plotOrigin(snapshot.seat), true)
+			CombatCamera.enter(ArenaLayout.plotOrigin(if who then who.seat else snapshot.seat), true)
 		end
-		plot.render(snapshot)
+		-- While scouting, your own units are not drawn on their plot.
+		plot.render(if who then { units = {}, items = {}, players = snapshot.players, seat = snapshot.seat } else snapshot)
+		scout.render(snapshot)
 		combat.setActive(inCombat)
 	end
 

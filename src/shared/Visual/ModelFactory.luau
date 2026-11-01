@@ -29,6 +29,7 @@ export type Visual = typeof(setmetatable(
 		height: number,
 		feetOffset: number, -- distance from the model pivot down to the feet
 		yaw: number, -- radians; the model's own "front" correction
+		upright: CFrame, -- the rotation the model has when standing upright (its authored orientation, plus any `rotation` fix)
 		basePivot: CFrame,
 		offset: CFrame, -- a temporary offset animations apply on top of the placed pivot
 	},
@@ -41,7 +42,7 @@ function Visual.place(self: Visual, position: Vector3, lookAt: Vector3?)
 	if lookAt then
 		local flat = Vector3.new(lookAt.X, target.Y, lookAt.Z)
 		if (flat - target).Magnitude > 0.01 then
-			self.basePivot = CFrame.lookAt(target, flat) * CFrame.Angles(0, self.yaw, 0)
+			self.basePivot = CFrame.lookAt(target, flat) * CFrame.Angles(0, self.yaw, 0) * self.upright
 			self.model:PivotTo(self.basePivot * self.offset)
 			return
 		end
@@ -122,6 +123,26 @@ local function placeholder(height: number, tint: Color3?): (Model, BasePart)
 	return model, part
 end
 
+-- Lowest point and height of a model measured on the world axes (the model's own bounding box is
+-- aligned to its root part, which is wrong when that part is rotated).
+local function worldBounds(model: Model): (number, number)
+	local low, high = math.huge, -math.huge
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			local half = d.Size / 2
+			for _, sx in { -1, 1 } do
+				for _, sy in { -1, 1 } do
+					for _, sz in { -1, 1 } do
+						local y = d.CFrame:PointToWorldSpace(Vector3.new(half.X * sx, half.Y * sy, half.Z * sz)).Y
+						low, high = math.min(low, y), math.max(high, y)
+					end
+				end
+			end
+		end
+	end
+	return low, high - low
+end
+
 -- Builds a Visual for a model id. Never fails: a missing model becomes a placeholder block.
 function ModelFactory.create(modelId: string, options: Options?): Visual
 	local opts = options or {}
@@ -133,7 +154,14 @@ function ModelFactory.create(modelId: string, options: Options?): Visual
 	local fitted = height * ((def and def.scale) or 1)
 	if template then
 		model, root = dress(template)
-		local current = model:GetExtentsSize().Y
+		-- A model saved lying down is stood up by `rotation` (degrees about the world X, Y, Z axes).
+		local tilt = def and def.rotation
+		if tilt then
+			local authored = model:GetPivot()
+			local at = authored.Position
+			model:PivotTo(CFrame.new(at) * CFrame.Angles(math.rad(tilt.X), math.rad(tilt.Y), math.rad(tilt.Z)) * (authored - at))
+		end
+		local _, current = worldBounds(model)
 		if current > 0 then
 			model:ScaleTo(model:GetScale() * fitted / current)
 		end
@@ -143,15 +171,16 @@ function ModelFactory.create(modelId: string, options: Options?): Visual
 
 	-- Measure the pivot-to-feet distance after scaling so models of any pivot stand on the ground.
 	local pivot = model:GetPivot()
-	local box, size = model:GetBoundingBox()
+	local lowest = worldBounds(model)
 	local self = setmetatable({
 		model = model,
 		primary = root,
 		modelId = modelId,
 		isPlaceholder = template == nil,
 		height = fitted,
-		feetOffset = pivot.Position.Y - (box.Position.Y - size.Y / 2),
+		feetOffset = pivot.Position.Y - lowest,
 		yaw = math.rad((def and def.facing) or 0),
+		upright = pivot - pivot.Position,
 		basePivot = pivot,
 		offset = CFrame.identity,
 	}, Visual)

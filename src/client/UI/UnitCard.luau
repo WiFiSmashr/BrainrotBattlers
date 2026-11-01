@@ -105,7 +105,7 @@ function UnitCard.build(parent: Instance): View
 		Components.clear(itemsRow, { UIListLayout = true })
 
 		local portrait = Components.create("Frame", { Size = UDim2.new(1, -8, 0, 150), BackgroundTransparency = 1, LayoutOrder = 0, ZIndex = 22, Parent = body })
-		if not UnitPortrait.attach(portrait, def, 22) then
+		if not UnitPortrait.attach(portrait, def, 22, true) then
 			portrait:Destroy() -- no model yet: the card is just text
 		end
 		local stats = BaseStats.resolve(def.cost, def.archetype, unit.s)

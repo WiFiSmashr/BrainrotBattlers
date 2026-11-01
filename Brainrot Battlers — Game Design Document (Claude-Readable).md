@@ -2,6 +2,8 @@
 
 Nov 1, 2026 · @Brian
 
+> **Revision note.** This document was brought up to date with the game as built and the changes the team requested during play: the 3D experience, the main menu and queue, the new top bar, scouting, auto-placement, and the shop, bot, item and augment changes. Each change cites its entry in `docs/DECISIONS.md` (D-numbers). Where a section below says "original design", the game no longer follows it.
+
 ## 1. How Claude must use this document
 
 This document is the single source of truth for building the foundation of Brainrot Battlers (working title) in Roblox. Follow it literally; when it is silent, log an assumption instead of improvising.
@@ -84,7 +86,8 @@ When two designs conflict, the lower-numbered pillar wins.
 - Chibi, high-contrast, saturated palettes. Big heads, small bodies, readable silhouettes at phone size.
 - Each unit has a rarity color border: Common gray, Uncommon green, Rare blue, Epic purple, Legendary gold.
 - Ability effects use one dominant color per unit so players can tell who cast what.
-- Placeholder art is acceptable. Phase 1 to 6 MUST use colored blocky models with a text label, and art swaps in later by changing `modelId` in unit data.
+- The game is a 3D experience (D-64). Every unit is a 3D character on a checkerboard arena, seen from a fixed, angled, TFT-style camera behind the viewer's own side. There is no avatar and no free camera. Players arrange units by tapping and dragging the 3D models themselves (12.3).
+- Characters get their models and animations by dropping a Model file in `assets/models/<unit id>.rbxm` (see `docs/MODELS.md`). A character without a model is a colored block with a text label, so art can arrive one character at a time. Animation states are idle, walk, attack, cast, hit, death and victory; a missing animation falls back to a simple procedural movement.
 
 ### 2.4 Match shape
 
@@ -95,14 +98,17 @@ When two designs conflict, the lower-numbered pillar wins.
 | Target length | About 25 to 30 minutes, 28 to 34 rounds `[CONFIG]` |
 | Win condition | Last player with health above 0. Placement is by elimination order. |
 | Persistence | None in the foundation. No DataStores until a later phase. |
+| Entering a match | A main menu. Players press Play to join a queue (LOBBY-04). |
 
 - **LOBBY-01.** Lobby size is `lobbySize` in `GameConfig`. It is 4 while building and 8 at launch `[CONFIG]`. Every system MUST read it, and no code may assume 8 players.
 - **LOBBY-02.** The shared unit pool scales with lobby size: copies per unit = `ceil(copies × lobbySize / 8)`. A 4-player lobby has 11, 10, 9, 5 and 5 copies for costs 1 to 5.
 - **LOBBY-03.** The carousel (4.8) offers exactly one item per living player.
+- **LOBBY-04.** (D-70 to D-72.) Players start in a main menu with a Play button. Play puts them in the queue and Cancel takes them out. A match starts when the queue holds `lobbySize` players, or `lobbyWaitSeconds` (10s) after the first player queued with at least `minPlayersToStart` (1) players waiting. Bots fill every empty seat (BOT-01). One match runs at a time per server; players who queue meanwhile wait for the next one. The end screen's Back to Menu button returns a player to the menu once they are eliminated or the match has ended. A match with no human left is cleaned up at once.
+- **LOBBY-05.** (D-77.) Each seated player owns a plot, laid out on a square grid centred on the baseplate (2 x 2 for 4 players, 3 x 3 for 8), 600 studs apart so no plot is ever in view of another. A plot is a 7 x 8 arena of 6 x 4 stud cells, plus a bench row of 9 slots behind each side's back line.
 
 ### 2.5 Out of scope for the foundation
 
-Claude MUST NOT build these yet: ranked ladder, cosmetics, shop monetization, Robux purchases, chat features, tutorials, spectating, and cross-server matchmaking.
+Claude MUST NOT build these yet: ranked ladder, cosmetics, shop monetization, Robux purchases, chat features, tutorials, live spectating of other players' fights, and cross-server matchmaking. (Scouting another player's board and bench during Prep is in scope, see 12.2.)
 
 ## 3. Roblox architecture
 
@@ -139,18 +145,19 @@ src/
   server/
     Main.server.luau
     Match/    MatchService, RoundSchedule, Pairing, PveBoards
-    Player/   PlayerState, ActionRouter
+    Player/   PlayerState, ActionRouter, AutoPlace
     Economy/  EconomyService, ShopService, UnitPool, MergeService, LevelService
     Items/    InventoryService, CarouselService
     Augments/ AugmentService
     Combat/   CombatSim, StatBlock, Damage, Targeting, Statuses, CombatRunner
     Effects/  EffectRunner, Traits/, Items/, Augments/, Abilities/
     Bots/     BotController
+    (also) Match/SessionService (main menu and queue), Combat/ArenaBuilder, ModelLoader
   client/
     Main.client.luau
     StateStore.luau
     UI/       components and panels
-    View/     BoardView, CombatView
+    View/     PlotView, ScoutView, CombatCamera, CombatWorld
 tests/
 docs/         DECISIONS.md, SUGGESTIONS.md
 ```
@@ -197,18 +204,18 @@ Carousel picks use one more action, `PickCarousel(index)` (4.8).
 - At most 4 fights run at once with about 18 units each plus tokens, so under 120 simulated units.
 - Average sim cost MUST stay under 2 ms per fight per frame on the server.
 - A snapshot MUST stay under 4 KB. Send it only when state changed.
-- A client renders only its own arena. Other fights are simulated but not replicated to that client.
+- A client renders only its own arena (and, while scouting, the scouted player's board). Other fights are simulated but not replicated to that client. Plots are 600 studs apart (LOBBY-05).
 - Target 60 FPS on a mid-range phone during combat.
 
 ## 4. Match structure and flow
 
-A match is a loop of Prep, Combat and Resolve phases grouped into stages, and it ends when one player remains. Players can act only during Prep.
+A match is a loop of Prep, Combat and Resolve phases grouped into stages, and it ends when one player remains. Players can move, sell, equip and combine only during Prep; the shop actions (buy, reroll, buy XP, lock) also work during Combat (D-58).
 
 ### 4.1 Match flow
 
 &#91;embedded content: match flow · Prep, Combat, Resolve loop\]
 
-The `MatchService` state machine MUST implement these states, plus Carousel (4.8): `Lobby`, `MatchStart`, `Prep`, `Combat`, `Resolve`, `MatchEnd`. Each transition fires `PhaseChanged` to all clients.
+The `MatchService` state machine MUST implement these states, plus Carousel (4.8): `Lobby`, `MatchStart`, `Prep`, `Combat`, `Resolve`, `MatchEnd`. Each transition fires `PhaseChanged` to every player in the match (players in the menu receive nothing). A `Lobby` state exists only inside the queue logic of LOBBY-04.
 
 Carousel rounds run the Carousel phase and then Prep, with no Combat or Resolve (4.8).
 
@@ -231,7 +238,7 @@ Round IDs read `stage-round`. The global round number is `round` in stage 1, and
 
 | Phase | Duration | What happens, in order |
 | --- | --- | --- |
-| Prep | 25s (20s in round 1-1). Add 15s in augment rounds. | 1. Passive XP. 2. Income paid with its breakdown (ECON-02). 3. Shop refreshes unless locked. 4. Augment offer if due. 5. Players act. At the end the server locks all intents. |
+| Prep | 25s (20s in round 1-1). Add 15s in augment rounds. | 1. Passive XP. 2. Income paid with its breakdown (ECON-02). 3. Shop refreshes unless locked. 4. Augment offer if due. 5. Players act. At the end the server fills any free board slots from the bench (BRD-05) and locks all intents. |
 | Combat | Up to 30s, then overtime | Pair opponents, build both teams on the home plot, run the sim, and stream events. |
 | Resolve | 4s | Apply the result: player damage, streaks, PvE drops, eliminations, then the end check. |
 
@@ -239,7 +246,7 @@ Round IDs read `stage-round`. The global round number is `round` in stage 1, and
 
 - **PAIR-01.** In PvP rounds, living players are paired at random. A pair MUST NOT repeat the previous round's pairing when another valid pairing exists.
 - **PAIR-02.** With an odd number of living players, one player fights a ghost: a copy of another living player's board. The ghost's owner takes no damage and gets no reward.
-- **PAIR-03.** The home player is whoever has been home fewer times so far. Ties are random. The fight happens on the home player's plot, and the away player's camera moves there for the fight (CMB-02 mirrors their team).
+- **PAIR-03.** The home player is whoever has been home fewer times so far. Ties are random. The fight happens on the home player's plot, and the away player's camera moves behind their own (far) side of that plot, so a player's units are always nearest the camera (CMB-02 mirrors their team; D-65).
 - **PAIR-04.** In PvE rounds, every player fights monsters at the same time on their own plot.
 
 ### 4.5 Player damage and elimination `[CONFIG]`
@@ -272,7 +279,7 @@ Monsters are plain units generated from formulas, with `g` as the global round. 
 
 - **BOT-01.** When fewer than 8 humans join, bots fill the empty seats.
 - **BOT-02.** Bots MUST act only through the same `ActionRouter` intents as humans. They get no hidden bonuses.
-- **BOT-03.** The first bot version is simple: each Prep it buys affordable units that share a trait with its board, buys XP when it holds 50 or more gold, and places units front-line first by range.
+- **BOT-03.** The first bot version is simple: each Prep it buys affordable units that share a trait with its board, buys XP when it holds 50 or more gold, and places units front-line first by range. It also fuses loose components and equips items on the board unit holding the fewest, never above 3 (D-55).
 
 ### 4.8 Carousel rounds `[CONFIG]`
 
@@ -387,7 +394,7 @@ Each shop slot first rolls a cost tier using these percentages. Every row MUST s
 - **SHOP-03.** The shop refreshes automatically at the start of every Prep, after income is paid, unless the player has locked it.
 - **SHOP-04.** A manual reroll costs 2 gold `[CONFIG]`. A lock toggle holds the current shop across rounds until unlocked.
 - **SHOP-05.** If the rolled tier has no copies left, fall back to the next lower tier. If all tiers are empty, show an empty slot.
-- **SHOP-06.** A purchase is rejected if the bench is full, unless the purchase completes a star-up merge that frees space.
+- **SHOP-06.** A purchase is rejected if the bench is full, unless the purchase completes a star-up merge that frees space. If the bench is full, the player owns exactly one star-1 copy of a unit and the shop shows another copy, buying either one buys both, charges both prices and completes the merge (D-54).
 - **SHOP-07.** The server rolls the shop. The client displays it and sends only slot indices.
 
 ### 6.5 Shared unit pool `[CONFIG]`
@@ -463,9 +470,10 @@ Health = costHealth \times archetypeHealth \times 1.8^{(star - 1)} \qquad AD = c
 ### 7.5 Board, bench and sell rules
 
 - **BRD-01.** The board is 7 columns by 4 rows for each player. The bench has 9 slots `[CONFIG]`.
-- **BRD-02.** Units move between board, bench and sell zone only during Prep. Moves are validated server-side.
+- **BRD-02.** Units move between board, bench and sell zone only during Prep. Moves are validated server-side. In the 3D view, dragging a unit onto the shop panel sells it (D-67).
 - **BRD-03.** Dropping a unit on an occupied cell swaps the two units.
 - **BRD-04.** The server rejects a move to the board if the board already holds a number of units equal to the player level, unless it is a swap.
+- **BRD-05.** (D-75.) When Prep ends, before combat is simulated, any free board slots (up to the player level) are filled from the bench, leftmost bench slot first. Melee units go to the front rows and ranged units to the back rows, centre columns first. Units already on the board never move.
 
 ### 7.6 Launch roster (24 units) `[EXAMPLE]`
 
@@ -685,16 +693,16 @@ Augments are game-changing perks that a player picks three times per match, and 
 
 - **AUG-01.** Each player gets an augment offer at the start of Prep in rounds 2-1, 3-2 and 4-2. The offer appears before the shop refreshes, and Prep gains 15 extra seconds `[CONFIG]`.
 - **AUG-02.** An offer shows 3 choices. The player picks 1. If the timer ends first, the server picks the first choice.
-- **AUG-03.** Each choice rolls its rarity independently from the weights in 10.3, then picks an augment of that rarity at random.
-- **AUG-04.** The 3 choices MUST be distinct, MUST NOT be already owned, and MUST NOT all share the same primary category. The primary category is the first one listed.
-- **AUG-05.** Each offer allows 1 reroll that replaces all 3 choices. The reroll is free `[CONFIG]`.
-- **AUG-06.** There is no shared pool. Several players can own the same augment.
+- **AUG-03.** The offer's rarity is rolled once per augment round, before the choices are shown, with equal weights (10.3). Every player sees that same rarity and all 3 of their choices have it; their choices still differ (D-59).
+- **AUG-04.** The 3 choices MUST be distinct, MUST NOT be already owned, MUST NOT have been shown to that player earlier when the pool allows (D-61), and MUST NOT all share the same primary category. The primary category is the first one listed.
+- **AUG-05.** Each offer allows 1 reroll that replaces all 3 choices, keeping the offer's rarity. The reroll is free `[CONFIG]`.
+- **AUG-06.** There is no shared pool. Several players can own the same augment, but no player owns or is shown the same augment twice.
 - **AUG-07.** Augments are Effect modules registered on the player (`Server/Effects/Augments/<id>.luau`). They can add stat modifiers, listen to hooks, grant items or gold, and change Config values for that player only, such as the interest cap.
 - **AUG-08.** Chosen augments are visible to all players as icons beside the player's portrait.
 
-### 10.3 Rarity weights per offer `[CONFIG]`
+### 10.3 Rarity weights per offer `[CONFIG]` (D-59)
 
-Each row sums to 100.
+One rarity is rolled per augment round, with equal weights at every stage: a 1/3 chance each of Bronze, Silver and Gold. The table below is the original design and is no longer used.
 
 | Offer | Round | Bronze | Silver | Gold |
 | --- | --- | --- | --- | --- |
@@ -823,7 +831,7 @@ stat = (base + \sum flat) \times (1 + \sum pct) \times \prod mult
 ### 11.8 Visual replication
 
 - The server owns logical state. It sends clients a compact `CombatEvents` batch each tick for VFX, damage numbers and health bars. Event types are `Attack`, `Cast`, `Damage`, `Heal`, `Shield`, `Status`, `Move`, `Death`, `Summon`.
-- In the foundation, the server moves anchored placeholder models to each unit's cell center once per step. Smooth client-side interpolation is a later optimization.
+- The server plays the fight back on the home plot as 3D models (CombatPlayback): units walk smoothly between cells, face their target, play attack, cast and hit animations, and play their death animation before they are removed (D-57, D-63). Health and mana bars, names, status icons and damage numbers are drawn over the units by each client from the events, colored per viewer (D-66).
 - Clients MUST NOT run gameplay logic. They only display events.
 
 ## 12. UI and UX requirements
@@ -842,17 +850,19 @@ The UI is a thin, phone-friendly view of server state: it renders what the serve
 
 | Panel | Contents |
 | --- | --- |
-| Top bar | Stage-round label (e.g. "3-2"), phase name, countdown timer, and the 8-player list with health bars and augment icons. |
+| Top bar | Top centre: the stage number, phase name and countdown timer, with a round timeline for the current stage only (played rounds dimmed, the current round outlined, later rounds colored PvE / PvP / Pick, a dot on augment rounds). Beside it, the player list with health bars and augment icons; clicking a player scouts their board (below) (D-74, D-79). |
 | Economy bar | Gold with an interest meter (a pip per 10 gold, up to 5), level, XP bar with "x / y", and the streak indicator. |
-| Shop | 5 slots showing name, cost, traits and rarity color. Buttons: Reroll (2), Buy XP (4), Lock. Slots grey out when unaffordable. |
-| Board and bench | The 7×4 board and 9-slot bench with a sell zone. Shows a "units 4 / 5" counter against the player level. |
-| Item inventory | Components and combined items. Combine mode via drag or tap-tap. Items show as small icons on units. |
+| Shop | 5 slots showing name, cost, traits and rarity color, over the character's artwork (`Shared/Data/Portraits`) or, without art, its model (D-80). A slot is outlined teal and tagged "OWNED xN" when you already own a copy, and outlined gold and tagged "STAR UP" when buying it completes a merge. Buttons: Reroll (2), Buy XP (4), Lock. Slots grey out when unaffordable. |
+| Board and bench | In the 3D world, not a panel: your 7×4 board and 9-slot bench are models on your plot. The economy bar shows "Units x / y" and "Bench x / y". Dragging a unit onto the shop sells it. Monsters of a PvE round stand on the far half during Prep (D-67, D-68). |
+| Item inventory | Components and combined items. Combine mode via drag or tap-tap. Items show as small icons on units. Tapping an item shows a details box (kind, recipe, stats, effect); tapping two components shows the item they would fuse into before Combine is pressed (D-56, D-60). |
 | Trait panel | One row per trait on the board, with icon, count, tier pips, and next breakpoint. Active traits sort first. Tapping a row shows its tier text. |
 | Unit info card | Opens on tap or long-press: stats, ability text for the current star, traits, and items. |
 | Augment picker | Modal with 3 cards, rarity-colored, with a Reroll button and a countdown. Cannot be dismissed without choosing. |
 | Income popup | Shows the itemized income breakdown for 2 seconds at the start of Prep (rule ECON-02). |
-| Combat overlay | Health and mana bars over units, damage numbers, status icons, and a fight timer. |
-| End screen | Placement, stats, and a Play Again button. |
+| Combat view | The 3D arena seen from the fixed camera (CameraConfig), with health and mana bars over units, damage numbers, status icons, and a fight timer. The shop, economy bar and bench stay usable (D-58). |
+| End screen | Placement, stats, and a Back to Menu button (D-70). |
+| Main menu | Title, a Play / Cancel button, the queue count ("In queue 2 / 4"), the start countdown and a note when a match is already running (LOBBY-04). Shown whenever the player is not in a match. |
+| Scout banner | While you look at another player's board: whose board it is and a My board button. Boards and benches are public; gold and shops are not (D-79). |
 | Carousel panel | Shows the shared offerings, whose turn it is, and a pick timer. Picked offerings are greyed out with the picker's name. |
 
 ### 12.3 Interactions
@@ -860,11 +870,13 @@ The UI is a thin, phone-friendly view of server state: it renders what the serve
 | Action | Drag (desktop and touch) | Tap-only alternative |
 | --- | --- | --- |
 | Buy a unit | Tap the shop slot | Same |
-| Move a unit | Drag it to a cell or bench slot | Tap the unit, then tap the target cell |
-| Sell a unit | Drag it to the sell zone | Open the info card, then tap Sell |
+| Move a unit | Drag the 3D unit to a tile, a bench slot or another unit (swap) | Tap the unit, then tap the target tile or slot |
+| Sell a unit | Drag it onto the shop panel | Open the info card, then tap Sell |
 | Equip an item | Drag the item onto a unit | Tap the item, then tap the unit |
 | Combine components | Drag one onto the other | Tap one, tap the other, press Combine |
-| Unequip an item | Drag it off the unit | Open the info card, then tap the item |
+| Unequip an item | Drag it off the unit | Open the info card, tap the item, then tap Take off (D-56) |
+| Scout a player | Click their card in the top bar | Same; click it again, or press My board, to return (D-79) |
+| Queue for a match | Press Play in the main menu | Same (LOBBY-04) |
 
 ### 12.4 Feedback requirements
 
@@ -1022,6 +1034,14 @@ Claude builds the game in nine phases, and a phase is done only when every accep
 | 6. Augments and inventory | `InventoryService`, `AugmentService`, 24 augment modules, offers at 2-1, 3-2 and 4-2, and the carousel (4.8). | Offers obey AUG-03 to AUG-05. Carousel picks go lowest health first and each player gets exactly one component. Each augment's effect is verified by a test. Per-player Config overrides (such as the interest cap) do not affect other players. |
 | 7. UI | Every panel in 12.2 and every interaction in 12.3, built mobile-first. | A full game is playable on a phone-size emulator using taps only. Rejected actions show toasts. The timer matches the server. |
 | 8. Bots and full match | `BotController`, the end screen, and a balance harness that simulates whole matches. | 1 human plus 7 bots completes a match to a winner with no errors. The harness prints average match length in rounds and the average win rate by trait. |
+
+### 14.1a Work after Phase 8
+
+Built after the nine phases, in this order, each logged in `docs/DECISIONS.md`:
+
+1. Tweak rounds: bots use items (D-55), item details and fuse preview (D-56, D-60), dying units vanish (D-57), shop actions during Combat (D-58), full-bench merge buy (D-54), equal-chance augment rarity per round and unique augments per player (D-59, D-61).
+2. A 3D model and animation framework (D-62, D-63, `docs/MODELS.md`), then the move to a full 3D experience: fixed angled camera and 3D combat (D-64 to D-66), 3D Prep with tap and drag, drag-to-shop selling and the PvE monster preview (D-67 to D-69).
+3. Main menu and queue (D-70 to D-72), arena floor fix and layout (D-73, D-76, D-77), top-bar timeline (D-74), auto-placement (D-75), model orientation fix (D-78) and scouting (D-79).
 
 ### 14.2 Definition of done for every phase
 

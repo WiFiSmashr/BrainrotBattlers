@@ -7,7 +7,7 @@
 local Lighting = game:GetService("Lighting")
 local ArenaLayout = require(game:GetService("ReplicatedStorage").Shared.Util.ArenaLayout)
 
-local CELL_STUDS = ArenaLayout.cellStuds
+local CELL_WIDTH, CELL_DEPTH = ArenaLayout.cellWidth, ArenaLayout.cellDepth
 local COLUMNS, ROWS = 7, 8
 
 local HOME_COLORS = { Color3.fromRGB(62, 98, 140), Color3.fromRGB(90, 130, 172) }
@@ -38,7 +38,7 @@ end
 
 -- Fills `folder` with the plot centred on `origin` (the floor top is y = 0).
 function ArenaBuilder.build(folder: Folder, origin: Vector3)
-	local width, depth = COLUMNS * CELL_STUDS, ROWS * CELL_STUDS
+	local width, depth = COLUMNS * CELL_WIDTH, ROWS * CELL_DEPTH
 	part(folder, "Floor", Vector3.new(width + 6, BASE_HEIGHT, depth + 6), origin + Vector3.new(0, BASE_CENTRE_Y, 0), RIM_COLOR)
 
 	local tiles = Instance.new("Folder")
@@ -48,7 +48,7 @@ function ArenaBuilder.build(folder: Folder, origin: Vector3)
 		for row = 1, ROWS do
 			local palette = if row <= ROWS / 2 then HOME_COLORS else AWAY_COLORS
 			local at = ArenaLayout.cellPosition(origin, col, row)
-			part(tiles, ("Tile_%d_%d"):format(col, row), Vector3.new(CELL_STUDS - TILE_GAP, 1, CELL_STUDS - TILE_GAP),
+			part(tiles, ("Tile_%d_%d"):format(col, row), Vector3.new(CELL_WIDTH - TILE_GAP, 1, CELL_DEPTH - TILE_GAP),
 				at + Vector3.new(0, -0.5, 0), palette[(col + row) % 2 + 1], true)
 		end
 	end
@@ -61,7 +61,7 @@ function ArenaBuilder.build(folder: Folder, origin: Vector3)
 		local middle = ArenaLayout.benchPosition(origin, 5, side[2] :: boolean)
 		part(folder, "BenchPlatform" .. side[1], Vector3.new(width + 6, BASE_HEIGHT, 6), Vector3.new(middle.X, BASE_CENTRE_Y, middle.Z), RIM_COLOR)
 		for index = 1, ArenaLayout.benchSlots do
-			part(bench, ("Bench_%s_%d"):format(side[1], index), Vector3.new(2.9, 1, 2.9),
+			part(bench, ("Bench_%s_%d"):format(side[1], index), Vector3.new(4.2, 1, 2.9),
 				ArenaLayout.benchPosition(origin, index, side[2] :: boolean) + Vector3.new(0, -0.5, 0), BENCH_COLOR, true)
 		end
 	end

@@ -100,3 +100,23 @@ Training Pup) and `pet` (Pet Squad pets) are model ids too. Save `assets/models/
 | Your board, bench and monster preview in Prep | `src/client/View/PlotView.luau` |
 | Where things stand (plots, cells, bench slots) | `src/shared/Util/ArenaLayout.luau` |
 | Combat camera, bars and damage numbers | `src/client/View/CombatCamera.luau`, `src/client/View/CombatWorld.luau` |
+
+## A model lies flat or faces the wrong way
+
+The game keeps a model exactly as it looks in Studio: whatever way is "up" for the model's root part there
+is "up" in the game. So if a model lies on its face in the game:
+
+1. Open `assets/models/<id>.rbxm` in Studio on its own. If it also lies flat there, it was exported lying
+   down. If it stands up but its **root part is rotated** (the Orientation in Properties is not 0, 0, 0),
+   that also works now: the rotation is kept.
+2. Stand it up with `rotation` (degrees about the world X, Y, Z axes) in `Models.models`:
+
+   ```lua
+   { id = "noodle_nugget", rotation = Vector3.new(-90, 0, 0) },
+   ```
+
+   Try `(-90, 0, 0)` first, then `(90, 0, 0)`, then `(0, 0, 90)` / `(0, 0, -90)`; one of them stands almost
+   any model up. Check it with `ModelPreview.show("noodle_nugget")`.
+3. If it then faces away from the enemy, add `facing = 180` (or 90 / -90).
+
+The height and the feet are measured after the rotation, so the model stands on the tile at the right size.

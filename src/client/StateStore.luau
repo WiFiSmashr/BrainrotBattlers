@@ -12,6 +12,7 @@ local StateStore = {
 	toast = Signal.new() :: any, -- reason code
 	combat = Signal.new() :: any, -- a batch of combat events
 	menu = { status = "Menu", queued = 0, needed = 8, startsAt = nil :: number?, matchRunning = false } :: { [string]: any },
+	scouting = nil :: number?, -- user id of the player whose board is on screen (D-79), or nil for your own
 	userId = Players.LocalPlayer.UserId,
 }
 
@@ -65,6 +66,18 @@ function StateStore.setMenu(info: { [string]: any })
 		-- Nothing to draw until the first snapshot; the heartbeat delivers it within a moment.
 	end
 	StateStore.menu = info
+	StateStore.changed:fire()
+end
+
+-- Shows another player's board (or your own again with nil). Clicking the same player twice goes back.
+function StateStore.setScouting(userId: number?)
+	if userId == StateStore.userId or userId == StateStore.scouting then
+		userId = nil
+	end
+	if StateStore.scouting == userId then
+		return
+	end
+	StateStore.scouting = userId
 	StateStore.changed:fire()
 end
 

@@ -6,6 +6,7 @@
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Server = game:GetService("ServerScriptService"):WaitForChild("Server")
 local CameraConfig = require(Shared.Config.CameraConfig)
+local GameConfig = require(Shared.Config.GameConfig)
 local CombatCamera = require(game:GetService("StarterPlayer"):WaitForChild("StarterPlayerScripts"):WaitForChild("Client"):WaitForChild("View"):WaitForChild("CombatCamera"))
 local ArenaBuilder = require(Server.Combat.ArenaBuilder)
 local ArenaLayout = require(Shared.Util.ArenaLayout)
@@ -43,10 +44,10 @@ return function(t)
 			local camera = CombatCamera.pose(Vector3.new(0, 0, 0), viewerIsHome)
 			local near = if viewerIsHome then -1 else 1 -- the sign of z on the viewer's own side
 			for _, point in {
-				Vector3.new(-14, G, -16), Vector3.new(14, G, -16), Vector3.new(-14, G, 16), Vector3.new(14, G, 16),
+				Vector3.new(-21, G, -16), Vector3.new(21, G, -16), Vector3.new(-21, G, 16), Vector3.new(21, G, 16),
 				Vector3.new(0, G, -16), Vector3.new(0, G, 16), Vector3.new(0, G, 0),
 				-- The bench row behind the viewer's back line, and the edge of its platform.
-				Vector3.new(-14, G, near * 22), Vector3.new(14, G, near * 22), Vector3.new(0, G, near * 25),
+				Vector3.new(-21, G, near * 22), Vector3.new(21, G, near * 22), Vector3.new(0, G, near * 25),
 			} do
 				local y = screenY(camera, point)
 				t.truthy(y > topBar, ("a point is under the top bar: %.3f"):format(y))
@@ -72,11 +73,11 @@ return function(t)
 			for row = 1, 8 do
 				local tile = tiles:FindFirstChild(("Tile_%d_%d"):format(col, row)) :: Part
 				t.truthy(tile ~= nil, ("missing tile %d,%d"):format(col, row))
-				-- Same cell centre as ArenaLayout.cellPosition: x = (4 - col) * 4, z = (row - 4.5) * 4.
-				t.near(tile.Position.X, origin.X + (4 - col) * 4, 1e-6)
+				-- Same cell centre as ArenaLayout.cellPosition: x = (4 - col) * 6, z = (row - 4.5) * 4.
+				t.near(tile.Position.X, origin.X + (4 - col) * 6, 1e-6)
 				t.near(tile.Position.Z, origin.Z + (row - 4.5) * 4, 1e-6)
 				t.near(tile.Position.Y + tile.Size.Y / 2, ArenaLayout.groundY, 1e-6, "the tile top is at the ground height")
-				t.truthy(tile.Size.X < 4, "a gap shows between squares")
+				t.truthy(tile.Size.X < 6, "a gap shows between squares")
 			end
 		end
 		local a = (tiles:FindFirstChild("Tile_1_1") :: Part).Color
@@ -95,7 +96,7 @@ return function(t)
 			awaySlots[i] = ArenaLayout.benchPosition(origin, i, false)
 			t.near(homeSlots[i].Z - origin.Z, -22, 1e-6)
 			t.near(awaySlots[i].Z - origin.Z, 22, 1e-6)
-			t.truthy(math.abs(homeSlots[i].X - origin.X) <= 14, "inside the arena width")
+			t.truthy(math.abs(homeSlots[i].X - origin.X) <= 21, "inside the arena width")
 		end
 		-- Home viewer looks toward +Z, so their left is +X; the away viewer looks toward -Z, so their left is -X.
 		t.truthy(homeSlots[1].X > homeSlots[9].X)
@@ -108,7 +109,14 @@ return function(t)
 		for seat = 1, 8 do
 			t.eq(ArenaLayout.seatAt(ArenaLayout.plotOrigin(seat)), seat)
 		end
-		t.near(ArenaLayout.plotOrigin(3).X - ArenaLayout.plotOrigin(2).X, 500)
+		-- Plots form a square grid inside the 2048-stud baseplate, never closer than 600 studs.
+		for a = 1, GameConfig.lobbySize do
+			local pa = ArenaLayout.plotOrigin(a)
+			t.truthy(math.abs(pa.X) <= 900 and math.abs(pa.Z) <= 900, "inside the baseplate")
+			for b = a + 1, GameConfig.lobbySize do
+				t.truthy((pa - ArenaLayout.plotOrigin(b)).Magnitude >= 600, "plots are far apart")
+			end
+		end
 	end)
 
 	t.test("PvE monsters stand on the same cells in the Prep preview and in the fight (D-68)", function()

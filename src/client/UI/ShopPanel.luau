@@ -7,6 +7,7 @@ local ShopConfig = require(Shared.Config.ShopConfig)
 local EconomyConfig = require(Shared.Config.EconomyConfig)
 local GameConfig = require(Shared.Config.GameConfig)
 local Index = require(Shared.Util.Index)
+local ShopHints = require(Shared.Util.ShopHints)
 local Theme = require(script.Parent.Theme)
 local Components = require(script.Parent.Components)
 local Actions = require(script.Parent.Actions)
@@ -16,6 +17,8 @@ local DragController = require(script.Parent.DragController)
 
 local SLOT_WIDTH, SLOT_HEIGHT, GAP = 200, 200, 8
 local BUTTON_WIDTH = 150
+local OWNED_COLOR = Color3.fromRGB(70, 215, 215) -- already own a copy
+local STAR_UP_COLOR = Color3.fromRGB(255, 205, 40) -- buying completes a star-up
 
 local ShopPanel = {}
 
@@ -50,7 +53,7 @@ function ShopPanel.build(parent: Instance): View
 		end,
 	})
 	Components.label({
-		Size = UDim2.fromOffset(width, 22), Position = UDim2.fromOffset(0, -24), Text = "Drag a unit onto the shop to sell it", TextSize = 16,
+		Size = UDim2.fromOffset(width, 22), Position = UDim2.fromOffset(0, -46), Text = "Drag a unit onto the shop to sell it", TextSize = 16,
 		TextColor3 = Theme.colors.textDim, Font = Theme.fontBody, TextStrokeTransparency = 0.5, Parent = frame,
 	})
 
@@ -107,19 +110,63 @@ function ShopPanel.build(parent: Instance): View
 					Parent = slotsFrame, radius = 10,
 				})
 				UnitPortrait.attach(slot, def, 1)
+				local hasArt = UnitPortrait.hasArt(def)
 				local stroke = Instance.new("UIStroke")
 				stroke.Color = Theme.costColor(def.cost)
 				stroke.Thickness = 6
 				stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 				stroke.Parent = slot
-				local ink = if affordable then Color3.new(0, 0, 0) else Theme.colors.textDim
-				Components.label({ Size = UDim2.new(1, -12, 0, 56), Position = UDim2.fromOffset(6, 8), Text = def.name, TextSize = 26, TextWrapped = true, TextColor3 = ink, Parent = slot })
-				Components.label({ Size = UDim2.new(1, -12, 0, 60), Position = UDim2.fromOffset(6, 70), Text = traitNames(def.traits), TextSize = 20, TextWrapped = true, TextColor3 = ink, Font = Theme.fontBody, Parent = slot })
-				Components.label({ Size = UDim2.new(1, -12, 0, 34), Position = UDim2.fromOffset(6, 132), Text = def.archetype, TextSize = 18, TextColor3 = ink, Font = Theme.fontBody, Parent = slot })
-				Components.label({
-					Size = UDim2.new(1, -12, 0, 36), Position = UDim2.new(0, 6, 1, -40), Text = if buysBoth then ("buy both: %d gold"):format(price) else ("%d gold"):format(price), TextSize = if buysBoth then 22 else 28,
-					TextColor3 = if affordable then Theme.colors.bg else Theme.colors.bad, TextXAlignment = Enum.TextXAlignment.Right, Parent = slot,
+
+				-- Over artwork the text sits on dark strips so it stays readable.
+				local ink = if hasArt then Color3.new(1, 1, 1) elseif affordable then Color3.new(0, 0, 0) else Theme.colors.textDim
+				if hasArt then
+					for _, band in { { 0, 56 }, { SLOT_HEIGHT - 84, 84 } } do
+						Components.create("Frame", {
+							Size = UDim2.new(1, 0, 0, band[2]), Position = UDim2.fromOffset(0, band[1]), BackgroundColor3 = Color3.new(0, 0, 0),
+							BackgroundTransparency = 0.45, BorderSizePixel = 0, ZIndex = 2, Parent = slot,
+						})
+					end
+				end
+				local function text(props: { [string]: any })
+					props.ZIndex = 3
+					props.Parent = slot
+					if hasArt then
+						props.TextStrokeTransparency = 0.4
+					end
+					return Components.label(props)
+				end
+				text({ Size = UDim2.new(1, -12, 0, if hasArt then 48 else 56), Position = UDim2.fromOffset(6, if hasArt then 4 else 8), Text = def.name, TextSize = if hasArt then 24 else 26, TextWrapped = true, TextColor3 = ink })
+				text({
+					Size = UDim2.new(1, -12, 0, if hasArt then 40 else 60), Position = UDim2.fromOffset(6, if hasArt then SLOT_HEIGHT - 82 else 70),
+					Text = traitNames(def.traits), TextSize = 20, TextWrapped = true, TextColor3 = ink, Font = Theme.fontBody,
 				})
+				if not hasArt then
+					text({ Size = UDim2.new(1, -12, 0, 34), Position = UDim2.fromOffset(6, 132), Text = def.archetype, TextSize = 18, TextColor3 = ink, Font = Theme.fontBody })
+				end
+				text({
+					Size = UDim2.new(1, -12, 0, 36), Position = UDim2.new(0, 6, 1, -40), Text = if buysBoth then ("buy both: %d gold"):format(price) else ("%d gold"):format(price), TextSize = if buysBoth then 22 else 28,
+					TextColor3 = if hasArt then (if affordable then Theme.colors.gold else Theme.colors.bad) elseif affordable then Theme.colors.bg else Theme.colors.bad,
+					TextXAlignment = Enum.TextXAlignment.Right,
+				})
+
+				-- Highlights: a gold outline and tag when buying completes a star-up, a teal one when already owned.
+				local hint = ShopHints.evaluate(snapshot.units, defId, buysBoth)
+				if hint.starUp or hint.owned > 0 then
+					local color = if hint.starUp then STAR_UP_COLOR else OWNED_COLOR
+					local glow = Components.create("Frame", {
+						Size = UDim2.new(1, -8, 1, -8), Position = UDim2.fromOffset(4, 4), BackgroundColor3 = color,
+						BackgroundTransparency = if hint.starUp then 0.82 else 0.9, BorderSizePixel = 0, ZIndex = 2, Parent = slot,
+					})
+					Components.style(glow, 8, color, if hint.starUp then 5 else 3)
+					local tag = Components.panel({
+						Size = UDim2.fromOffset(if hint.starUp then 168 else 112, 24), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0, 0),
+						BackgroundColor3 = color, radius = 12, Active = false, ZIndex = 5, Parent = slot,
+					})
+					Components.label({
+						Size = UDim2.fromScale(1, 1), TextColor3 = Color3.new(0, 0, 0), TextSize = 16, ZIndex = 6, Parent = tag,
+						Text = if hint.starUp then (if hint.starUp >= 3 then "★★★ STAR UP to 3" else "★ STAR UP to 2") else ("OWNED x%d"):format(hint.owned),
+					})
+				end
 			end
 		end
 	end
