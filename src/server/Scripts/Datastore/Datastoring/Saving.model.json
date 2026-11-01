@@ -1,9 +1,0 @@
-{
-  "className": "BoolValue",
-  "properties": {
-    "SerializedOverrides": {
-      "BinaryString": ""
-    },
-    "Value": true
-  }
-}
