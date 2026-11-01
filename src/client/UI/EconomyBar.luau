@@ -14,7 +14,7 @@ export type View = { frame: Frame, render: (snapshot: { [string]: any }) -> () }
 -- Builds the bar into `parent`.
 function EconomyBar.build(parent: Instance): View
 	local frame = Components.panel({
-		Name = "EconomyBar", Size = UDim2.fromOffset(1254, 96), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 864),
+		Name = "EconomyBar", Size = UDim2.fromOffset(1254, 96), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 936),
 		Parent = parent,
 	})
 	local gold = Components.label({ Size = UDim2.fromOffset(190, 52), Position = UDim2.fromOffset(16, 6), Text = "0", TextSize = 46, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Theme.colors.gold, Parent = frame })

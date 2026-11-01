@@ -64,12 +64,9 @@ local GameConfig = {
 	-- Rounds where augment offers occur (AUG-01), keyed by round id.
 	augmentRounds = { ["2-1"] = 1, ["3-2"] = 2, ["4-2"] = 3 },
 
-	-- Augment rarity weights per offer (10.3); each row sums to 100. Index = offer number.
-	augmentRarityWeights = {
-		{ Bronze = 70, Silver = 28, Gold = 2 },
-		{ Bronze = 25, Silver = 60, Gold = 15 },
-		{ Bronze = 5, Silver = 45, Gold = 50 },
-	},
+	-- Augment rarity (D-59, replaces the per-offer weights of 10.3): one rarity is rolled per offer and
+	-- every choice in it has that rarity. Equal weights = a 1/3 chance of each at every stage.
+	augmentRarityWeights = { Bronze = 1, Silver = 1, Gold = 1 },
 	augmentChoices = 3,
 
 	-- Monster formulas (4.6): count = min(1 + floor(g/2), cap).

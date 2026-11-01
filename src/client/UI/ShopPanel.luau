@@ -10,6 +10,7 @@ local Index = require(Shared.Util.Index)
 local Theme = require(script.Parent.Theme)
 local Components = require(script.Parent.Components)
 local Actions = require(script.Parent.Actions)
+local UnitPortrait = require(script.Parent.UnitPortrait)
 
 local SLOT_WIDTH, SLOT_HEIGHT, GAP = 200, 200, 8
 local BUTTON_WIDTH = 150
@@ -32,7 +33,7 @@ end
 function ShopPanel.build(parent: Instance): View
 	local width = BUTTON_WIDTH + 12 + ShopConfig.slots * SLOT_WIDTH + (ShopConfig.slots - 1) * GAP
 	local frame = Components.create("Frame", {
-		Name = "ShopPanel", Size = UDim2.fromOffset(width, SLOT_HEIGHT), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 648),
+		Name = "ShopPanel", Size = UDim2.fromOffset(width, SLOT_HEIGHT), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 722),
 		BackgroundTransparency = 1, Parent = parent,
 	})
 
@@ -53,6 +54,16 @@ function ShopPanel.build(parent: Instance): View
 		lock.BackgroundColor3 = if snapshot.shop.locked then Theme.colors.accent else Theme.colors.panelLight
 		lock.TextColor3 = if snapshot.shop.locked then Color3.new(0, 0, 0) else Theme.colors.text
 
+		-- With a full bench, one owned copy and a second copy in the shop, a tap buys both (D-54).
+		local benchCount, starOne = 0, {}
+		for _, u in snapshot.units do
+			if u.b then
+				benchCount += 1
+			end
+			if u.s == 1 then
+				starOne[u.d] = (starOne[u.d] or 0) + 1
+			end
+		end
 		Components.clear(slotsFrame)
 		for i = 1, ShopConfig.slots do
 			local defId = snapshot.shop.slots[i]
@@ -62,7 +73,14 @@ function ShopPanel.build(parent: Instance): View
 				local empty = Components.panel({ Size = UDim2.fromOffset(SLOT_WIDTH, SLOT_HEIGHT), Position = position, BackgroundColor3 = Color3.fromRGB(30, 30, 44), Parent = slotsFrame })
 				Components.label({ Size = UDim2.fromScale(1, 1), Text = "Empty", TextSize = 24, TextColor3 = Theme.colors.textDim, Parent = empty })
 			else
-				local affordable = gold >= def.cost
+				local buysBoth = false
+				if benchCount >= GameConfig.benchSlots and starOne[defId] == 1 then
+					for other, shown in snapshot.shop.slots do
+						buysBoth = buysBoth or (other ~= i and shown == defId)
+					end
+				end
+				local price = if buysBoth then def.cost * 2 else def.cost
+				local affordable = gold >= price
 				local slot = Components.button({
 					Size = UDim2.fromOffset(SLOT_WIDTH, SLOT_HEIGHT), Position = position, Text = "", AutoButtonColor = false,
 					BackgroundColor3 = if affordable then (def.tint or Theme.colors.panelLight) else Color3.fromRGB(58, 58, 68),
@@ -71,6 +89,7 @@ function ShopPanel.build(parent: Instance): View
 					end,
 					Parent = slotsFrame, radius = 10,
 				})
+				UnitPortrait.attach(slot, def, 1)
 				local stroke = Instance.new("UIStroke")
 				stroke.Color = Theme.costColor(def.cost)
 				stroke.Thickness = 6
@@ -81,7 +100,7 @@ function ShopPanel.build(parent: Instance): View
 				Components.label({ Size = UDim2.new(1, -12, 0, 60), Position = UDim2.fromOffset(6, 70), Text = traitNames(def.traits), TextSize = 20, TextWrapped = true, TextColor3 = ink, Font = Theme.fontBody, Parent = slot })
 				Components.label({ Size = UDim2.new(1, -12, 0, 34), Position = UDim2.fromOffset(6, 132), Text = def.archetype, TextSize = 18, TextColor3 = ink, Font = Theme.fontBody, Parent = slot })
 				Components.label({
-					Size = UDim2.new(1, -12, 0, 36), Position = UDim2.new(0, 6, 1, -40), Text = ("%d gold"):format(def.cost), TextSize = 28,
+					Size = UDim2.new(1, -12, 0, 36), Position = UDim2.new(0, 6, 1, -40), Text = if buysBoth then ("buy both: %d gold"):format(price) else ("%d gold"):format(price), TextSize = if buysBoth then 22 else 28,
 					TextColor3 = if affordable then Theme.colors.bg else Theme.colors.bad, TextXAlignment = Enum.TextXAlignment.Right, Parent = slot,
 				})
 			end

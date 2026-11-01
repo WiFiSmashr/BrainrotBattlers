@@ -206,6 +206,8 @@ end
 local function enterPrep(self: any, at: number)
 	local info = self.info
 	self.carousel = nil
+	-- One rarity per augment round, shared by every player (D-59); each player still gets their own choices.
+	local roundRarity = if info.augmentOffer then AugmentService.rollRarity(self.rng) else nil
 	for _, id in Match.livingIds(self) do
 		local state = self.players[id]
 		state.rerollsThisRound = 0
@@ -218,7 +220,7 @@ local function enterPrep(self: any, at: number)
 			self.deps.onPrepStart(state)
 		end
 		if info.augmentOffer then
-			AugmentService.deal(state, info.augmentOffer, self.rng) -- AUG-01: before the shop refreshes
+			AugmentService.deal(state, info.augmentOffer, self.rng, roundRarity) -- AUG-01: before the shop refreshes
 		end
 		ShopService.refresh(state, self.pool, self.shopRng) -- SHOP-03, after income
 	end

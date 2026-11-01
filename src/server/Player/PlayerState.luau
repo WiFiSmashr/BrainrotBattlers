@@ -18,7 +18,7 @@ export type Unit = {
 export type Item = { uid: number, itemId: string, equippedTo: number? }
 
 -- A pending choice: an augment offer, or a follow-up pick (component / combined item) from an augment.
-export type Offer = { kind: "augment" | "component" | "combined", choices: { string }, offer: number?, rerolled: boolean }
+export type Offer = { kind: "augment" | "component" | "combined", choices: { string }, offer: number?, rerolled: boolean, rarity: string? }
 
 export type Streak = { kind: "win" | "loss" | "none", length: number }
 
@@ -38,6 +38,7 @@ export type State = {
 	shop: Shop,
 	overrides: { [string]: number }, -- per-player Config overrides (AUG-07, ECON-06)
 	augments: { string }, -- chosen augment ids (AUG-08)
+	seenAugments: { string }, -- every augment id this player has been shown, picked or not (D-61)
 	augmentOffer: Offer?, -- pending offer (AUG-01, AUG-02)
 	drops: { string }, -- the last component ids dropped to this player (ITM-11)
 	rerollsThisRound: number, -- for free rerolls
@@ -64,6 +65,7 @@ function PlayerState.new(userId: number, name: string): State
 		wonLastPvp = false,
 		lostLastPvp = false,
 		augments = {},
+		seenAugments = {},
 		augmentOffer = nil,
 		drops = {},
 		rerollsThisRound = 0,

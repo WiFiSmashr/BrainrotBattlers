@@ -250,4 +250,93 @@ return function(t)
 		t.eq(b.interest, 1)
 		t.eq(state.gold, 10 + 2 + 1)
 	end)
+
+	-- Buying both copies when the bench is full (D-54) ---------------------------------------------------
+	local BENCH_FILLERS = { "noodle_nugget", "sleepy_sock", "moo_moo_mogul", "zippy_zucchini", "pixel_pup", "rizz_rabbit", "wobble_banana", "mini_mod", "lag_lizard" }
+
+	local function fullBench(pool: any, state: any)
+		state.shop.slots = { false, false, false, false, false }
+		for i, id in BENCH_FILLERS do
+			UnitPool.take(pool, id)
+			PlayerState.newUnit(state, id, 1, i, nil)
+		end
+	end
+
+	t.test("full bench, one owned copy, two copies in the shop: one tap buys both and merges", function()
+		local pool, state = newGame(4)
+		fullBench(pool, state)
+		state.gold = 10
+		stock(state, pool, "noodle_nugget", 1)
+		stock(state, pool, "noodle_nugget", 3)
+		local r = ShopService.buy(state, 1)
+		t.eq(r.ok, true)
+		t.eq(#r.merges, 1)
+		t.eq(state.gold, 8, "pays for both copies")
+		t.eq(state.shop.slots[1], false)
+		t.eq(state.shop.slots[3], false)
+		local stars = {}
+		for _, u in state.units do
+			if u.defId == "noodle_nugget" then
+				table.insert(stars, u.star)
+			end
+		end
+		t.eq(table.concat(stars, ","), "2")
+		t.eq(PlayerState.firstOpenBench(state), nil, "the bench is still full, nothing needed a free slot")
+		t.eq(accounted(pool, state), pool.initialTotal)
+	end)
+
+	t.test("buying both costs twice the price and needs the gold for both", function()
+		local pool, state = newGame(4)
+		fullBench(pool, state)
+		UnitPool.take(pool, "grumpy_gelato")
+		PlayerState.newUnit(state, "grumpy_gelato", 1, nil, { col = 1, row = 1 }) -- the owned copy is on the board
+		stock(state, pool, "grumpy_gelato", 2)
+		stock(state, pool, "grumpy_gelato", 5)
+		state.gold = 5
+		t.eq(ShopService.buy(state, 2).reason, "NotEnoughGold")
+		t.eq(state.gold, 5)
+		t.eq(state.shop.slots[2], "grumpy_gelato")
+		t.eq(state.shop.slots[5], "grumpy_gelato")
+		state.gold = 6
+		local r = ShopService.buy(state, 5)
+		t.eq(r.ok, true)
+		t.eq(state.gold, 0)
+		for _, u in state.units do
+			if u.defId == "grumpy_gelato" then
+				t.eq(u.star, 2)
+				t.truthy(u.board and u.board.col == 1, "the merged unit keeps the board cell")
+			end
+		end
+		t.eq(accounted(pool, state), pool.initialTotal)
+	end)
+
+	t.test("no merge possible: a full bench still rejects the buy", function()
+		local pool, state = newGame(4)
+		fullBench(pool, state)
+		state.gold = 50
+		-- Only one copy in the shop, one owned.
+		stock(state, pool, "noodle_nugget", 1)
+		t.eq(ShopService.buy(state, 1).reason, "BenchFull")
+		-- Two copies in the shop but none owned: two buys would not complete a merge.
+		stock(state, pool, "cash_cat", 2)
+		stock(state, pool, "cash_cat", 3)
+		t.eq(ShopService.buy(state, 2).reason, "BenchFull")
+		t.eq(state.gold, 50)
+		t.eq(accounted(pool, state), pool.initialTotal)
+	end)
+
+	t.test("with two copies owned and a full bench, one buy completes the merge as before (SHOP-06)", function()
+		local pool, state = newGame(4)
+		fullBench(pool, state) -- one Noodle Nugget is on the bench
+		UnitPool.take(pool, "noodle_nugget")
+		PlayerState.newUnit(state, "noodle_nugget", 1, nil, { col = 2, row = 1 }) -- the second copy, on the board
+		stock(state, pool, "noodle_nugget", 1)
+		stock(state, pool, "noodle_nugget", 2)
+		state.gold = 10
+		local r = ShopService.buy(state, 1)
+		t.eq(r.ok, true)
+		t.eq(state.gold, 9, "only one copy was needed")
+		t.eq(state.shop.slots[2], "noodle_nugget", "the other shop copy stays")
+		t.eq(accounted(pool, state), pool.initialTotal)
+	end)
 end

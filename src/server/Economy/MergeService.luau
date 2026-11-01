@@ -23,6 +23,11 @@ local function copiesOf(state: PlayerState.State, defId: string, star: number): 
 	return list
 end
 
+-- How many star-1 copies of `defId` the player owns (board or bench).
+function MergeService.starOneCopies(state: PlayerState.State, defId: string): number
+	return #copiesOf(state, defId, 1)
+end
+
 -- True if adding one more star-1 copy of `defId` would trigger a merge (SHOP-06).
 function MergeService.wouldMerge(state: PlayerState.State, defId: string): boolean
 	return #copiesOf(state, defId, 1) >= 2

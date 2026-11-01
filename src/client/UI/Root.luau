@@ -109,14 +109,16 @@ function Root.build()
 				panel.render(snapshot)
 			end
 		end
-		-- The 3D playback lives in the workspace; this 2D view is the player-facing combat overlay.
+		-- The 3D playback lives in the workspace; this 2D view is the player-facing combat overlay. The
+		-- bench stays on screen during combat so purchases are visible.
 		local inCombat = phase == "Combat"
-		board.frame.Visible = not inCombat
+		board.frame.Visible = true
+		board.setCombat(inCombat)
+		board.render(snapshot)
 		if inCombat then
 			combat.show()
 		else
 			combat.hide()
-			board.render(snapshot)
 		end
 	end
 

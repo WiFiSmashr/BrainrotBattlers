@@ -90,7 +90,9 @@ function ShopService.toggleLock(state: PlayerState.State): boolean
 end
 
 -- Buys the unit in a shop slot. The pool copy was already removed at roll time (SHOP-02).
--- TODO(phase 3): the caller fires the OnUnitBought hook with the returned unit.
+-- Full bench: normally rejected (SHOP-06) unless the buy completes a merge. If the player owns exactly
+-- one star-1 copy and the shop shows another copy of the same unit, tapping either buys BOTH (paying
+-- for both) and the merge happens at once, so no bench slot is needed (D-54).
 function ShopService.buy(state: PlayerState.State, slot: number): BuyResult
 	local defId = state.shop.slots[slot]
 	if type(defId) ~= "string" then
@@ -100,21 +102,36 @@ function ShopService.buy(state: PlayerState.State, slot: number): BuyResult
 	if not def then
 		return { ok = false, reason = "UnknownUnit" }
 	end
-	if state.gold < def.cost then
+
+	local bench = PlayerState.firstOpenBench(state)
+	local partner: number? = nil
+	if not bench and not MergeService.wouldMerge(state, defId) then
+		if MergeService.starOneCopies(state, defId) == 1 then
+			for other, shown in state.shop.slots do
+				if other ~= slot and shown == defId then
+					partner = other
+					break
+				end
+			end
+		end
+		if not partner then
+			return { ok = false, reason = "BenchFull" }
+		end
+	end
+
+	local price = if partner then def.cost * 2 else def.cost
+	if state.gold < price then
 		return { ok = false, reason = "NotEnoughGold" }
 	end
-
-	-- SHOP-06: a full bench rejects the buy unless it completes a merge that frees space.
-	local bench = PlayerState.firstOpenBench(state)
-	if not bench and not MergeService.wouldMerge(state, defId) then
-		return { ok = false, reason = "BenchFull" }
-	end
-
-	EconomyService.spend(state, def.cost, "BuyUnit")
+	EconomyService.spend(state, price, "BuyUnit")
 	state.shop.slots[slot] = false
-	local unit = PlayerState.newUnit(state, defId, 1, bench, nil)
+	local first = PlayerState.newUnit(state, defId, 1, bench, nil)
+	if partner then
+		state.shop.slots[partner] = false
+		PlayerState.newUnit(state, defId, 1, nil, nil) -- unplaced; the merge consumes it at once
+	end
 	local merges = MergeService.resolve(state, defId)
-	return { ok = true, unitUid = unit.uid, merges = merges }
+	return { ok = true, unitUid = first.uid, merges = merges }
 end
 
 -- Sells a unit: refund = cost * 3^(star-1), copies return to the pool, items return to the

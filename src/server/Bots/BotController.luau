@@ -3,7 +3,8 @@
 -- intents as humans, so they get no hidden bonuses (BOT-02): same rate limit, same phase checks.
 -- BOT-03, first version: each Prep a bot places units front-line first by range, buys affordable
 -- units that share a trait with its board, and buys XP when it holds 50 or more gold. It also takes
--- augment choices (the first one) and picks from the carousel instantly (CAR-03).
+-- augment choices (the first one), picks from the carousel instantly (CAR-03), fuses loose components
+-- and equips items on the board unit holding the fewest.
 -- One intent per update() keeps a bot well under the 20-intents-per-second limit.
 
 local Shared = game:GetService("ReplicatedStorage").Shared
@@ -14,6 +15,7 @@ local PlayerState = require(script.Parent.Parent.Player.PlayerState)
 local CarouselService = require(script.Parent.Parent.Items.CarouselService)
 
 local XP_THRESHOLD = 50 -- BOT-03: buy XP at this much gold or more
+local MAX_ITEMS = 3 -- ITM-01: a unit holds at most 3 items
 local BOARD_ROWS_FRONT_FIRST = { 4, 3, 2, 1 }
 local BOARD_ROWS_BACK_FIRST = { 1, 2, 3, 4 }
 local COLUMNS_CENTER_OUT = { 4, 3, 5, 2, 6, 1, 7 }
@@ -121,6 +123,56 @@ local function thinkPrep(self: any, userId: number, state: PlayerState.State): b
 					return true
 				end
 			end
+		end
+	end
+
+	-- Items: fuse loose components, then put loose items on the board unit holding the fewest.
+	local loose, components = {}, {}
+	local held: { [number]: number } = {}
+	for _, item in state.inventory do
+		if item.equippedTo then
+			held[item.equippedTo] = (held[item.equippedTo] or 0) + 1
+		else
+			table.insert(loose, item)
+			local def = Index.item(item.itemId)
+			if def and def.kind == "Component" then
+				table.insert(components, item)
+			end
+		end
+	end
+	table.sort(loose, function(a, b)
+		return a.uid < b.uid
+	end)
+	table.sort(components, function(a, b)
+		return a.uid < b.uid
+	end)
+	if #components >= 2 then
+		local key = ("combine%d_%d"):format(components[1].uid, components[2].uid)
+		if not failed[key] and send(self, userId, "CombineItems", { itemUidA = components[1].uid, itemUidB = components[2].uid }, key) then
+			return true
+		end
+	end
+	if #loose > 0 and #boardUnits > 0 then
+		local target = nil
+		for _, unit in boardUnits do
+			local count = held[unit.uid] or 0
+			if count < MAX_ITEMS and (target == nil or count < (held[target.uid] or 0) or (count == (held[target.uid] or 0) and score(unit) > score(target))) then
+				target = unit
+			end
+		end
+		-- Fused items first: they are worth more than a loose component.
+		table.sort(loose, function(a, b)
+			local ka, kb = Index.item(a.itemId), Index.item(b.itemId)
+			local ca, cb = ka and ka.kind == "Combined", kb and kb.kind == "Combined"
+			if ca ~= cb then
+				return ca
+			end
+			return a.uid < b.uid
+		end)
+		local item = loose[1]
+		local key = ("equip%d_%d"):format(item.uid, if target then target.uid else 0)
+		if target and not failed[key] and send(self, userId, "EquipItem", { itemUid = item.uid, unitUid = target.uid }, key) then
+			return true
 		end
 	end
 

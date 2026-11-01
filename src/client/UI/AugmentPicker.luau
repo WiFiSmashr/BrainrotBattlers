@@ -52,7 +52,8 @@ function AugmentPicker.build(parent: Instance): View
 		if not offer then
 			return
 		end
-		title.Text = TITLES[offer.kind] or "Choose"
+		title.Text = if offer.kind == "augment" and offer.rarity then ("Choose a %s augment"):format(offer.rarity) else (TITLES[offer.kind] or "Choose")
+		title.TextColor3 = if offer.rarity then Theme.augmentColors[offer.rarity] else Theme.colors.text
 		reroll.Visible = offer.kind == "augment" and not offer.rerolled
 		Components.clear(cards, { UIListLayout = true })
 

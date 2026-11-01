@@ -1,22 +1,39 @@
 --!strict
--- Plays a finished fight back on anchored placeholder models and streams CombatEvents (GDD 11.8).
--- The sim is already decided; this only displays it. The only Combat module that touches Instances.
+-- Plays a finished fight back in the workspace and streams CombatEvents (GDD 11.8).
+-- The sim is already decided; this only displays it. Each unit is a Visual from ModelFactory (its 3D
+-- model if it has one, otherwise a coloured block) driven by a UnitAnimator: units walk between
+-- cells, face their target, attack, cast, flinch and, when they die, play their death animation and
+-- are removed. The only Combat module that touches Instances.
 
 local Players = game:GetService("Players")
 local Shared = game:GetService("ReplicatedStorage").Shared
 local Index = require(Shared.Util.Index)
+local ModelRegistry = require(Shared.Util.ModelRegistry)
+local ModelFactory = require(Shared.Visual.ModelFactory)
+local UnitAnimator = require(Shared.Visual.UnitAnimator)
 local FightTypes = require(script.Parent.Parent.Match.FightTypes)
 
 local CELL_STUDS = 4
 local ARENA_SPACING = 70
 local PLAYBACK_STEP = 0.05
 local LINGER_SECONDS = 1.5
+local LABEL_LIFT = 0.8 -- studs above the head
 
 local MONSTER_COLOR = Color3.fromRGB(200, 70, 70)
 local TOKEN_COLOR = Color3.fromRGB(235, 235, 235)
 local AWAY_COLOR = Color3.fromRGB(120, 120, 140)
 
-type Entry = { part: Part, label: TextLabel, name: string, maxHp: number }
+type Entry = {
+	visual: ModelFactory.Visual,
+	animator: UnitAnimator.UnitAnimator,
+	label: TextLabel,
+	gui: BillboardGui,
+	name: string,
+	maxHp: number,
+	team: string,
+	position: Vector3, -- where its feet are now
+	move: { from: Vector3, to: Vector3, start: number, duration: number }?,
+}
 
 local CombatPlayback = {}
 
@@ -29,9 +46,9 @@ function CombatPlayback.init(remote: RemoteEvent)
 	combatEvents = remote
 end
 
--- World position of an arena cell for a home player's plot.
+-- World position of the ground at an arena cell for a home player's plot (the floor top is y = 0).
 local function cellPosition(origin: Vector3, col: number, row: number): Vector3
-	return origin + Vector3.new((col - 4) * CELL_STUDS, 2.5, (row - 4.5) * CELL_STUDS)
+	return origin + Vector3.new((col - 4) * CELL_STUDS, 0, (row - 4.5) * CELL_STUDS)
 end
 
 -- Arena origin per home player; each player keeps one plot (PAIR-03).
@@ -68,23 +85,37 @@ local function arenaFolder(userId: number, origin: Vector3): Folder
 	return folder :: Folder
 end
 
--- Builds the placeholder block with a name + health label.
-local function makeUnit(parent: Instance, origin: Vector3, desc: any, team: string): Entry
-	local part = Instance.new("Part")
-	part.Name = "Unit_" .. desc.id
-	part.Anchored = true
-	part.CanCollide = false
-	part.Size = Vector3.new(3, 4, 3)
+-- The model id for a fight participant: the unit's own, or a generic one for monsters and tokens.
+local function modelIdFor(desc: any): (string, any)
 	local def = if desc.defId then Index.unit(desc.defId) else nil
-	part.Color = if desc.token then TOKEN_COLOR elseif def and def.tint then def.tint elseif team == "away" then AWAY_COLOR else MONSTER_COLOR
-	part.Position = cellPosition(origin, desc.col, desc.row)
-	part.Parent = parent
+	if def then
+		return ModelRegistry.modelIdOf(def), def
+	end
+	return if desc.token then "token" else "monster", nil
+end
+
+-- Which way a team faces: home toward +Z, away toward -Z (the other side of the arena).
+local function frontOf(team: string, position: Vector3): Vector3
+	return position + Vector3.new(0, 0, if team == "home" then 10 else -10)
+end
+
+-- Builds a unit's visual, animator and name / health label.
+local function makeUnit(parent: Instance, origin: Vector3, desc: any, team: string): Entry
+	local modelId, def = modelIdFor(desc)
+	local tint = if desc.token then TOKEN_COLOR elseif def and def.tint then def.tint elseif team == "away" then AWAY_COLOR else MONSTER_COLOR
+	local visual = ModelFactory.create(modelId, { tint = tint })
+	visual.model.Name = "Unit_" .. desc.id
+	local position = cellPosition(origin, desc.col, desc.row)
+	visual:place(position, frontOf(team, position))
+	visual.model.Parent = parent
+	local animator = UnitAnimator.new(visual, ModelRegistry.animationsFor(modelId))
 
 	local gui = Instance.new("BillboardGui")
 	gui.Size = UDim2.fromOffset(120, 40)
-	gui.StudsOffset = Vector3.new(0, 3.5, 0)
+	gui.StudsOffsetWorldSpace = Vector3.new(0, visual.height + LABEL_LIFT, 0)
 	gui.AlwaysOnTop = true
-	gui.Parent = part
+	gui.Adornee = visual.primary
+	gui.Parent = visual.primary
 	local label = Instance.new("TextLabel")
 	label.Size = UDim2.fromScale(1, 1)
 	label.BackgroundTransparency = 1
@@ -92,11 +123,35 @@ local function makeUnit(parent: Instance, origin: Vector3, desc: any, team: stri
 	label.TextStrokeTransparency = 0
 	label.TextScaled = true
 	label.Parent = gui
-	return { part = part, label = label, name = desc.name, maxHp = desc.maxHp or desc.hp }
+	return {
+		visual = visual, animator = animator, label = label, gui = gui, name = desc.name, maxHp = desc.maxHp or desc.hp,
+		team = team, position = position, move = nil,
+	}
 end
 
 local function setHp(entry: Entry, hp: number)
 	entry.label.Text = ("%s  %d/%d"):format(entry.name, math.max(0, math.floor(hp)), math.floor(entry.maxHp))
+end
+
+-- Turns a unit toward a point without moving it.
+local function face(entry: Entry, point: Vector3)
+	entry.visual:place(entry.position, point)
+end
+
+-- Advances every walking unit along its step.
+local function updateMoves(entries: { [number]: Entry }, now: number)
+	for _, entry in entries do
+		local move = entry.move
+		if move then
+			local alpha = math.clamp((now - move.start) / move.duration, 0, 1)
+			entry.position = move.from:Lerp(move.to, alpha)
+			entry.visual:place(entry.position, move.to)
+			if alpha >= 1 then
+				entry.move = nil
+				entry.animator:setMoving(false)
+			end
+		end
+	end
 end
 
 -- Starts playback of a fight. Returns immediately; a background task drives the models.
@@ -145,31 +200,66 @@ function CombatPlayback.play(fight: FightTypes.Fight, outcome: FightTypes.Outcom
 	end
 	send({ { e = "Roster", units = replay.roster, home = homeId } })
 
+	-- Applies one event to the models.
+	local function apply(ev: any, now: number)
+		local entry = entries[ev.unit or ev.target]
+		if ev.e == "Summon" then
+			teams[ev.unit] = teams[ev.owner]
+			entries[ev.unit] = makeUnit(folder, origin, { id = ev.unit, name = ev.name, token = true, col = ev.col, row = ev.row, hp = ev.hp, maxHp = ev.hp }, teams[ev.unit])
+			setHp(entries[ev.unit], ev.hp)
+		elseif not entry then
+			return
+		elseif ev.e == "Move" then
+			local goal = cellPosition(origin, ev.col, ev.row)
+			if ev.over and ev.over > 0 then
+				entry.move = { from = entry.position, to = goal, start = now, duration = ev.over }
+				entry.animator:setMoving(true)
+			else
+				entry.move = nil -- a dash or respawn: jump straight there
+				entry.position = goal
+				entry.visual:place(goal, frontOf(entry.team, goal))
+				entry.animator:setMoving(false)
+			end
+		elseif ev.e == "Attack" then
+			local target = entries[ev.target]
+			if target then
+				face(entry, target.position)
+			end
+			entry.animator:attack()
+		elseif ev.e == "Cast" then
+			entry.animator:cast()
+		elseif ev.e == "Damage" then
+			setHp(entry, ev.hp)
+			entry.animator:hit()
+		elseif ev.e == "Heal" then
+			setHp(entry, ev.hp)
+		elseif ev.e == "Death" then
+			-- Play the death animation, then remove the unit from the board (never left greyed out).
+			entries[ev.unit] = nil
+			entry.move = nil
+			entry.gui.Enabled = false
+			local seconds = entry.animator:die()
+			task.delay(seconds + 0.1, function()
+				entry.animator:destroy()
+				entry.visual:destroy()
+			end)
+		end
+	end
+
 	local events = replay.events or {}
 	task.spawn(function()
 		local startedAt = workspace:GetServerTimeNow()
 		local i = 1
 		while active[homeId] == folder and (i <= #events or workspace:GetServerTimeNow() - startedAt < outcome.seconds) do
-			local elapsed = workspace:GetServerTimeNow() - startedAt
+			local now = workspace:GetServerTimeNow()
+			local elapsed = now - startedAt
 			local batch = {}
 			while events[i] and events[i].t <= elapsed do
-				local ev = events[i]
-				local entry = entries[ev.unit or ev.target]
-				if ev.e == "Move" and entry then
-					entry.part.Position = cellPosition(origin, ev.col, ev.row)
-				elseif (ev.e == "Damage" or ev.e == "Heal") and entry then
-					setHp(entry, ev.hp)
-				elseif ev.e == "Death" and entry then
-					entry.part.Transparency = 0.8
-					entry.label.Text = entry.name .. " (out)"
-				elseif ev.e == "Summon" then
-					teams[ev.unit] = teams[ev.owner]
-					entries[ev.unit] = makeUnit(folder, origin, { id = ev.unit, name = ev.name, token = true, col = ev.col, row = ev.row, hp = ev.hp, maxHp = ev.hp }, teams[ev.unit])
-					setHp(entries[ev.unit], ev.hp)
-				end
-				table.insert(batch, ev)
+				apply(events[i], now)
+				table.insert(batch, events[i])
 				i += 1
 			end
+			updateMoves(entries, now)
 			if #batch > 0 then
 				send(batch)
 			end

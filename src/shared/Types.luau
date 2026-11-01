@@ -53,6 +53,23 @@ export type UnitDef = {
 	tint: Color3?, -- placeholder visuals
 }
 
+-- Animation asset ids by state (e.g. "rbxassetid://123456"). Any state may be left out; a missing
+-- animation falls back to a simple procedural effect (D-62).
+export type AnimationSet = {
+	idle: string?, walk: string?, attack: string?, cast: string?, hit: string?, death: string?, victory: string?,
+}
+
+-- How one 3D model is found and dressed (Shared/Data/Models). Everything is optional except `id`: a
+-- Model named `id` in ReplicatedStorage/UnitModels needs no entry at all.
+export type ModelDef = {
+	id: string,
+	template: string?, -- name of the Model in ReplicatedStorage/UnitModels; defaults to `id`
+	assetId: number?, -- Roblox asset id of a Model, loaded into UnitModels at server start when no template exists
+	scale: number?, -- size multiplier on top of the standard unit height (default 1)
+	facing: number?, -- yaw in degrees to turn the model so its front faces forward (default 0)
+	animations: AnimationSet?, -- this model's animations; missing states use the shared defaults
+}
+
 export type TierDef = { count: number, params: { [string]: number }, description: string }
 
 export type TraitDef = {

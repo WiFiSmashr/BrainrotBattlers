@@ -333,7 +333,7 @@ return function(t)
 		t.truthy(#toasts >= 8, "rejections must toast")
 
 		advanceTo(match, clock, 24) -- Combat
-		t.eq(router:handle(1, "ToggleLock", {}).reason, "WrongPhase")
+		t.eq(router:handle(1, "MoveUnit", { unitUid = 1, dest = { kind = "bench", index = 2 } }).reason, "WrongPhase")
 	end)
 
 	t.test("legal intents work and flag state dirty", function()
@@ -388,5 +388,62 @@ return function(t)
 		local snap = Snapshot.build(match, 1)
 		local json = game:GetService("HttpService"):JSONEncode(snap)
 		t.truthy(#json < 4096, "snapshot is " .. #json .. " bytes")
+	end)
+
+	t.test("during Combat players can still buy, reroll, level up and lock; board actions stay locked (D-58)", function()
+		local match, clock = harness(1, 4)
+		local router = ActionRouter.new(match, function() return clock.t end)
+		advanceTo(match, clock, 24) -- 1-1 Combat
+		t.eq(match.phase, "Combat")
+		local p = match:getPlayer(1)
+		p.gold = 20
+		local benchBefore, boardBefore = 0, 0
+		for _, u in p.units do
+			if u.board then
+				boardBefore += 1
+			else
+				benchBefore += 1
+			end
+		end
+		t.eq(router:handle(1, "BuyUnit", { slot = 1 }).ok, true)
+		t.eq(router:handle(1, "RerollShop", {}).ok, true)
+		t.eq(router:handle(1, "BuyXP", {}).ok, true)
+		t.eq(router:handle(1, "ToggleLock", {}).ok, true)
+		t.truthy(p.shop.locked)
+		local benchAfter, boardAfter = 0, 0
+		for _, u in p.units do
+			if u.board then
+				boardAfter += 1
+			else
+				benchAfter += 1
+			end
+		end
+		t.eq(benchAfter, benchBefore + 1, "the new unit waits on the bench")
+		t.eq(boardAfter, boardBefore, "the board is untouched mid-fight")
+
+		local unitUid
+		for _, u in p.units do
+			unitUid = u.uid
+		end
+		for _, case in {
+			{ "MoveUnit", { unitUid = unitUid, dest = { kind = "bench", index = 9 } } },
+			{ "SellUnit", { unitUid = unitUid } },
+			{ "EquipItem", { itemUid = 1, unitUid = unitUid } },
+			{ "UnequipItem", { itemUid = 1 } },
+			{ "CombineItems", { itemUidA = 1, itemUidB = 2 } },
+			{ "PickAugment", { index = 1 } },
+			{ "RerollAugment", {} },
+		} do
+			t.eq(router:handle(1, case[1], case[2]).reason, "WrongPhase", case[1])
+		end
+	end)
+
+	t.test("the shop actions are rejected once Combat is over and before Prep begins", function()
+		local match, clock = harness(1, 4)
+		local router = ActionRouter.new(match, function() return clock.t end)
+		t.eq(router:handle(1, "BuyXP", {}).reason, "WrongPhase") -- MatchStart
+		advanceTo(match, clock, 29) -- 1-1 Resolve
+		t.eq(match.phase, "Resolve")
+		t.eq(router:handle(1, "BuyXP", {}).reason, "WrongPhase")
 	end)
 end

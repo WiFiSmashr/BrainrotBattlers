@@ -6,7 +6,6 @@ local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Server = game:GetService("ServerScriptService"):WaitForChild("Server")
 local Augments = require(Shared.Data.Augments)
 local Units = require(Shared.Data.Units)
-local GameConfig = require(Shared.Config.GameConfig)
 local Rng = require(Shared.Util.Rng)
 local Index = require(Shared.Util.Index)
 local PlayerState = require(Server.Player.PlayerState)
@@ -95,20 +94,24 @@ end
 
 return function(t)
 	-- Offers ----------------------------------------------------------------------------------------
-	t.test("rarity weights per offer: 70/28/2, 25/60/15, 5/45/50 (AUG-03)", function()
+	t.test("one rarity per offer, rolled first and shared by all 3 choices; 1/3 each at every stage (D-59)", function()
 		local rng = Rng.new(11)
-		for offer, weights in GameConfig.augmentRarityWeights do
+		for offer = 1, 3 do
 			local counts = { Bronze = 0, Silver = 0, Gold = 0 }
 			for _ = 1, 3000 do
 				local s = newPlayer(1)
 				AugmentService.deal(s, offer, rng)
-				t.eq(#s.augmentOffer.choices, 3)
-				for _, id in s.augmentOffer.choices do
-					counts[byId[id].rarity] += 1
+				local choices = s.augmentOffer.choices
+				t.eq(#choices, 3)
+				local rarity = s.augmentOffer.rarity
+				t.truthy(counts[rarity] ~= nil, "offer carries its rarity")
+				for _, id in choices do
+					t.eq(byId[id].rarity, rarity, "all choices share the offer's rarity")
 				end
+				counts[rarity] += 1
 			end
-			for rarity, w in weights do
-				t.near(counts[rarity] / 9000 * 100, w, 5, ("offer %d %s"):format(offer, rarity))
+			for rarity, n in counts do
+				t.near(n / 3000 * 100, 100 / 3, 3.5, ("offer %d %s"):format(offer, rarity))
 			end
 		end
 	end)
@@ -139,10 +142,15 @@ return function(t)
 		local s = newPlayer(1)
 		AugmentService.deal(s, 2, rng)
 		local before = table.clone(s.augmentOffer.choices)
+		local rarity = s.augmentOffer.rarity
 		t.eq(AugmentService.reroll(s, rng).ok, true)
 		local after = s.augmentOffer.choices
 		t.eq(#after, 3)
 		t.truthy(isPrimaryDiverse(after))
+		t.eq(s.augmentOffer.rarity, rarity, "a reroll keeps the offer's rarity")
+		for _, id in after do
+			t.eq(byId[id].rarity, rarity)
+		end
 		for _, id in after do
 			t.truthy(not table.find(before, id), "reroll should show new augments when possible")
 		end
@@ -564,5 +572,112 @@ return function(t)
 			end
 		end
 		t.eq(n, 24)
+	end)
+
+	t.test("every player gets the same rarity in an augment round; rarities vary between rounds (D-59)", function()
+		local seen = { Bronze = 0, Silver = 0, Gold = 0 }
+		for seed = 1, 12 do
+			local clock = { t = 0 }
+			local match = MatchService.new({
+				lobbySize = 8, seed = seed, now = function() return clock.t end,
+				combat = function(): any
+					return { winner = "draw", survivors = 0, seconds = 5 }
+				end,
+			})
+			for id = 1, 8 do
+				match:addPlayer(id, "P" .. id)
+			end
+			match:start()
+			local perRound: { [string]: { [string]: boolean } } = {}
+			match.events.phaseChanged:connect(function(info: any)
+				if info.phase == "Prep" then
+					for id = 1, 8 do
+						local offer = match:getPlayer(id).augmentOffer
+						if offer then
+							perRound[info.roundId] = perRound[info.roundId] or {}
+							perRound[info.roundId][offer.rarity] = true
+							for _, augmentId in offer.choices do
+								t.eq(byId[augmentId].rarity, offer.rarity, "a choice differs from the offer's rarity")
+							end
+						end
+					end
+				end
+			end)
+			clock.t = 2500
+			match:update()
+			local rounds = 0
+			for roundId, rarities in perRound do
+				rounds += 1
+				local count = 0
+				for rarity in rarities do
+					count += 1
+					seen[rarity] += 1
+				end
+				t.eq(count, 1, ("seed %d round %s: players saw different rarities"):format(seed, roundId))
+			end
+			t.eq(rounds, 3)
+		end
+		for rarity, n in seen do
+			t.truthy(n >= 4, rarity .. " should come up in some rounds: " .. n)
+		end
+	end)
+
+	t.test("an augment never shows up twice for one player when the pool allows (D-61)", function()
+		local rng = Rng.new(61)
+		for _ = 1, 200 do
+			local s = newPlayer(1)
+			local shown: { [string]: boolean } = {}
+			-- One Bronze, one Silver and one Gold round, each rerolled: 18 distinct augments fit the pools.
+			for round, rarity in { "Bronze", "Silver", "Gold" } do
+				AugmentService.deal(s, round, rng, rarity)
+				for _, id in s.augmentOffer.choices do
+					t.truthy(not shown[id], id .. " was shown twice")
+					shown[id] = true
+				end
+				AugmentService.reroll(s, rng)
+				for _, id in s.augmentOffer.choices do
+					t.truthy(not shown[id], id .. " was shown twice after a reroll")
+					shown[id] = true
+				end
+				AugmentService.pick(s, 1, rng)
+				s.augmentOffer = nil
+			end
+		end
+	end)
+
+	t.test("when a rarity runs short, repeats of unpicked augments are allowed but owned ones never are", function()
+		local rng = Rng.new(62)
+		for _ = 1, 200 do
+			local s = newPlayer(1)
+			for round = 1, 3 do -- three Bronze rounds with rerolls need 18 of only 7 Bronze augments
+				AugmentService.deal(s, round, rng, "Bronze")
+				for _, id in s.augmentOffer.choices do
+					t.truthy(not table.find(s.augments, id), "an owned augment was offered")
+					t.eq(byId[id].rarity, "Bronze")
+				end
+				AugmentService.reroll(s, rng)
+				for _, id in s.augmentOffer.choices do
+					t.truthy(not table.find(s.augments, id), "an owned augment was offered after a reroll")
+				end
+				take(s, s.augmentOffer.choices[1], rng) -- own the first choice for real
+				s.augmentOffer = nil
+			end
+			t.eq(#s.augments, 3)
+		end
+	end)
+
+	t.test("players may own the same augment as each other; each still gets any augment only once (AUG-06)", function()
+		local a, b = newPlayer(1), newPlayer(2)
+		take(a, "piggy_bank")
+		take(b, "piggy_bank")
+		t.eq(a.augments[1], "piggy_bank")
+		t.eq(b.augments[1], "piggy_bank")
+		local rng = Rng.new(63)
+		for _ = 1, 300 do
+			for _, p in { a, b } do
+				AugmentService.deal(p, 1, rng, "Bronze")
+				t.truthy(not table.find(p.augmentOffer.choices, "piggy_bank"), "an owned augment was offered again")
+			end
+		end
 	end)
 end

@@ -18,11 +18,16 @@ type Result = PlayerState.Result
 local ActionRouter = {}
 ActionRouter.__index = ActionRouter
 
--- Every action and the one phase it is allowed in (BRD-02, ITM-02, CAR-06).
-local ACTION_PHASE: { [string]: string } = {
-	BuyUnit = "Prep", RerollShop = "Prep", BuyXP = "Prep", ToggleLock = "Prep", MoveUnit = "Prep", SellUnit = "Prep",
-	EquipItem = "Prep", UnequipItem = "Prep", CombineItems = "Prep", PickAugment = "Prep", RerollAugment = "Prep",
-	PickCarousel = "Carousel",
+-- Every action and the phases it is allowed in (BRD-02, ITM-02, CAR-06). The shop actions also work
+-- during Combat, so players can keep buying, rerolling, levelling and locking while a fight plays
+-- (D-58); the fight is already decided, and new units land on the bench.
+local PREP = { Prep = true }
+local SHOP_PHASES = { Prep = true, Combat = true }
+local ACTION_PHASES: { [string]: { [string]: boolean } } = {
+	BuyUnit = SHOP_PHASES, RerollShop = SHOP_PHASES, BuyXP = SHOP_PHASES, ToggleLock = SHOP_PHASES,
+	MoveUnit = PREP, SellUnit = PREP,
+	EquipItem = PREP, UnequipItem = PREP, CombineItems = PREP, PickAugment = PREP, RerollAugment = PREP,
+	PickCarousel = { Carousel = true },
 }
 
 -- Creates a router bound to a match. `now` is the server clock in seconds.
@@ -138,11 +143,11 @@ function ActionRouter.handle(self: any, userId: number, name: any, args: any): R
 	local result: Result
 	if rateLimited(self, userId) then
 		result = { ok = false, reason = "RateLimited" }
-	elseif type(name) ~= "string" or not ACTION_PHASE[name] then
+	elseif type(name) ~= "string" or not ACTION_PHASES[name] then
 		result = { ok = false, reason = "UnknownAction" }
 	elseif not match:isAlive(userId) then
 		result = { ok = false, reason = "NotInMatch" }
-	elseif match.phase ~= ACTION_PHASE[name] then
+	elseif not ACTION_PHASES[name][match.phase] then
 		result = { ok = false, reason = "WrongPhase" }
 	else
 		result = dispatch(self, userId, match:getPlayer(userId), name, if type(args) == "table" then args else {})

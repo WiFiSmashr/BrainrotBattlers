@@ -1,12 +1,14 @@
 --!strict
--- Tap-only selection state: the selected unit and up to two selected items (UI-04). This is local
--- UI state only (UI-01 allows drag previews and open menus); it is never sent anywhere by itself.
+-- Tap-only selection state: the selected unit, up to two selected items, and the item whose details
+-- are shown (UI-04). This is local UI state only (UI-01 allows drag previews and open menus); it is
+-- never sent anywhere by itself.
 
 local Signal = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared").Util.Signal)
 
 local Selection = {
 	unit = nil :: number?, -- selected unit uid; also the unit whose info card is open
 	items = {} :: { number }, -- selected item uids, oldest first (two selected components can be combined)
+	inspected = nil :: number?, -- the item whose effects the item panel shows
 	changed = Signal.new() :: any,
 }
 
@@ -16,7 +18,7 @@ function Selection.selectUnit(uid: number?)
 	Selection.changed:fire()
 end
 
--- Selects or deselects an item. At most two stay selected; the oldest drops out.
+-- Selects or deselects an item and shows its details. At most two stay selected; the oldest drops out.
 function Selection.toggleItem(uid: number)
 	local i = table.find(Selection.items, uid)
 	if i then
@@ -27,6 +29,13 @@ function Selection.toggleItem(uid: number)
 			table.remove(Selection.items, 1)
 		end
 	end
+	Selection.inspected = uid
+	Selection.changed:fire()
+end
+
+-- Shows an item's details without selecting it (used for items on a unit).
+function Selection.inspectItem(uid: number?)
+	Selection.inspected = uid
 	Selection.changed:fire()
 end
 
@@ -45,6 +54,7 @@ end
 function Selection.clear()
 	Selection.unit = nil
 	Selection.items = {}
+	Selection.inspected = nil
 	Selection.changed:fire()
 end
 

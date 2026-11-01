@@ -5,6 +5,8 @@
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local ItemData = require(Shared.Data.Items)
+local Index = require(Shared.Util.Index)
+local ItemText = require(Shared.Util.ItemText)
 local Theme = require(script.Parent.Theme)
 local Components = require(script.Parent.Components)
 local Actions = require(script.Parent.Actions)
@@ -34,9 +36,31 @@ function InventoryPanel.build(parent: Instance): View
 		Parent = parent,
 	})
 	Components.label({ Size = UDim2.new(1, 0, 0, 40), Text = "Items", TextSize = 30, Parent = frame })
-	local grid = Components.scroll({ Size = UDim2.new(1, -12, 1, -170), Position = UDim2.fromOffset(6, 44), Parent = frame })
+	local grid = Components.scroll({ Size = UDim2.new(1, -12, 0, 288), Position = UDim2.fromOffset(6, 44), Parent = frame })
 	Components.create("UIGridLayout", {
 		CellSize = UDim2.fromOffset(TILE, TILE), CellPadding = UDim2.fromOffset(6, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = grid,
+	})
+	-- Details of the item last tapped (loose or on a unit): stats, recipe and what it does.
+	local detail = Components.panel({
+		Size = UDim2.new(1, -12, 0, 258), Position = UDim2.fromOffset(6, 338), BackgroundColor3 = Color3.fromRGB(46, 48, 72), radius = 8, Parent = frame,
+	})
+	local detailName = Components.label({
+		Size = UDim2.new(1, -12, 0, 32), Position = UDim2.fromOffset(8, 4), TextSize = 24, TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = Theme.colors.accent, Parent = detail,
+	})
+	local detailBody = Components.scroll({ Size = UDim2.new(1, -8, 1, -94), Position = UDim2.fromOffset(4, 38), Parent = detail })
+	local detailText = Components.label({
+		Size = UDim2.new(1, -12, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextSize = 17, TextWrapped = true, Font = Theme.fontBody,
+		TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, Parent = detailBody,
+	})
+	local takeOff = Components.button({
+		Size = UDim2.new(1, -12, 0, 48), AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 6, 1, -6), Text = "Take off", TextSize = 22,
+		Visible = false, Parent = detail,
+		onTap = function()
+			if Selection.inspected then
+				Actions.unequipItem(Selection.inspected) -- the tap route for 12.3 "unequip"
+			end
+		end,
 	})
 	local hint = Components.label({
 		Size = UDim2.new(1, -16, 0, 50), Position = UDim2.new(0, 8, 1, -120), TextSize = 16, TextWrapped = true, Font = Theme.fontBody,
@@ -54,7 +78,7 @@ function InventoryPanel.build(parent: Instance): View
 		end,
 	})
 
-	-- Dropping an equipped item here takes it off its unit (UI-04: the tap route is the unit card).
+	-- Dropping an equipped item here takes it off its unit (the tap route is "Take off" in the details box).
 	DragController.registerTarget(frame, {
 		accepts = function(payload)
 			return payload.kind == "equipped"
@@ -73,6 +97,48 @@ function InventoryPanel.build(parent: Instance): View
 				ids[item.u] = item.i
 			end
 		end
+		-- Item details: the last tapped item, whether it is loose or on a unit.
+		local inspected = nil
+		for _, item in snapshot.items do
+			if item.u == Selection.inspected then
+				inspected = item
+			end
+		end
+		local inspectedDef = if inspected then Index.item(inspected.i) else nil
+		-- Two components selected: show what the fused item would be before Combine is pressed.
+		local previewDef, previewUses = nil, ""
+		if #Selection.items == 2 then
+			local a, b = ids[Selection.items[1]], ids[Selection.items[2]]
+			local resultId = if a and b then recipes[if a < b then a .. "+" .. b else b .. "+" .. a] else nil
+			previewDef = if resultId then Index.item(resultId) else nil
+			if a and b then
+				previewUses = ItemIcon.name(a) .. " + " .. ItemIcon.name(b)
+			end
+		end
+		if previewDef then
+			detailName.Text = "Makes: " .. previewDef.name
+			detailText.Text = ItemText.describe(previewDef) .. "\n\nFuses " .. previewUses
+			takeOff.Visible = false
+		elseif inspected and inspectedDef then
+			local text = ItemText.describe(inspectedDef)
+			if inspected.e then
+				for _, unit in snapshot.units do
+					local unitDef = if unit.u == inspected.e then Index.unit(unit.d) else nil
+					if unitDef then
+						text = ("Equipped on %s\n\n%s"):format(unitDef.name, text)
+					end
+				end
+			end
+			detailName.Text = inspectedDef.name
+			detailText.Text = text
+			takeOff.Visible = inspected.e ~= nil
+		else
+			Selection.inspected = nil -- the item was combined or sold away
+			detailName.Text = "Item details"
+			detailText.Text = "Tap an item to see what it does."
+			takeOff.Visible = false
+		end
+
 		table.sort(loose, function(a, b)
 			return a.u < b.u
 		end)

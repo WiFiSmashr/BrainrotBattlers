@@ -152,27 +152,27 @@ return function(t)
 				t.truthy(seenPair[category .. "/" .. rarity], "missing " .. category .. "/" .. rarity)
 			end
 		end
-		-- Per offer: rarities with weight > 0 must hold 3+ augments (even after owning 2) spanning 2+ primaries.
-		for offer, weights in GameConfig.augmentRarityWeights do
-			local sum = 0
+		-- Every rarity must be able to fill an offer by itself, even after the player owns 2 of them:
+		-- 3+ unowned augments spanning 2+ primary categories (AUG-04, D-59). Rarity weights are equal.
+		local weights = GameConfig.augmentRarityWeights
+		t.eq(weights.Bronze, weights.Silver)
+		t.eq(weights.Silver, weights.Gold)
+		t.truthy(weights.Bronze > 0)
+		for _, rarity in { "Bronze", "Silver", "Gold" } do
 			local pool = 0
 			local primaries: { [string]: boolean } = {}
 			for _, aug in Augments do
-				if (weights :: any)[aug.rarity] > 0 then
+				if aug.rarity == rarity then
 					pool += 1
 					primaries[aug.categories[1]] = true
 				end
 			end
-			for _, w in weights :: any do
-				sum += w
-			end
-			t.eq(sum, 100, "offer " .. offer .. " weights")
-			t.truthy(pool - 2 >= GameConfig.augmentChoices, "offer " .. offer .. " pool too small")
+			t.truthy(pool - 2 >= GameConfig.augmentChoices, rarity .. " pool too small")
 			local primaryCount = 0
 			for _ in primaries do
 				primaryCount += 1
 			end
-			t.truthy(primaryCount >= 2, "offer " .. offer .. " needs 2+ primary categories")
+			t.truthy(primaryCount >= 2, rarity .. " needs 2+ primary categories")
 		end
 	end)
 

@@ -14,7 +14,7 @@ local Theme = require(script.Parent.Parent.UI.Theme)
 local Components = require(script.Parent.Parent.UI.Components)
 local StateStore = require(script.Parent.Parent.StateStore)
 
-local CELL, GAP = 58, 3
+local CELL, GAP = 51, 3
 local COLUMNS, ROWS = CombatConfig.arenaColumns, CombatConfig.arenaRows
 
 -- Status name -> short tag and color for the little icons over a unit.
@@ -52,18 +52,19 @@ function CombatView.build(parent: Instance): View
 	local width = COLUMNS * (CELL + GAP)
 	local height = ROWS * (CELL + GAP)
 	local frame = Components.create("Frame", {
-		Name = "CombatView", Size = UDim2.fromOffset(width, height + 50), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 104),
+		Name = "CombatView", Size = UDim2.fromOffset(width, height + 44), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 104),
 		BackgroundTransparency = 1, Visible = false, ZIndex = 10, Parent = parent,
 	})
-	local header = Components.label({ Size = UDim2.new(1, 0, 0, 44), Text = "Combat", TextSize = 34, Parent = frame })
+	local header = Components.label({ Size = UDim2.new(1, 0, 0, 40), Text = "Combat", TextSize = 30, Parent = frame })
 	local arena = Components.panel({
-		Size = UDim2.fromOffset(width, height), Position = UDim2.fromOffset(0, 50), BackgroundColor3 = Color3.fromRGB(28, 30, 44), radius = 10, Parent = frame,
+		Size = UDim2.fromOffset(width, height), Position = UDim2.fromOffset(0, 42), BackgroundColor3 = Color3.fromRGB(28, 30, 44), radius = 10, Parent = frame,
 	})
 	arena.ClipsDescendants = false
 	-- A faint line between the two halves.
 	Components.create("Frame", { Size = UDim2.new(1, 0, 0, 3), Position = UDim2.fromOffset(0, height / 2 - 1), BackgroundColor3 = Theme.colors.panelLight, BorderSizePixel = 0, Parent = arena })
 
 	local widgets: { [number]: Widget } = {}
+	local teamOf: { [number]: string } = {} -- survives a unit's death (summons need their owner's team)
 	local flip = false
 	local startedAt = 0
 	local running = false
@@ -77,11 +78,12 @@ function CombatView.build(parent: Instance): View
 	end
 
 	local function floatText(widget: Widget, text: string, color: Color3, size: number)
+		local origin = widget.frame.Position -- numbers are parented to the arena so they outlast a dying unit
 		local label = Components.label({
-			Size = UDim2.fromOffset(CELL + 30, 24), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, -6), Text = text, TextSize = size,
-			TextColor3 = color, TextStrokeTransparency = 0.2, ZIndex = 30, Parent = widget.frame,
+			Size = UDim2.fromOffset(CELL + 30, 24), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(origin.X.Offset + CELL / 2, origin.Y.Offset - 6), Text = text, TextSize = size,
+			TextColor3 = color, TextStrokeTransparency = 0.2, ZIndex = 30, Parent = arena,
 		})
-		TweenService:Create(label, TweenInfo.new(0.8, Enum.EasingStyle.Quad), { Position = UDim2.new(0.5, 0, 0, -44), TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
+		TweenService:Create(label, TweenInfo.new(0.8, Enum.EasingStyle.Quad), { Position = UDim2.fromOffset(origin.X.Offset + CELL / 2, origin.Y.Offset - 44), TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
 		task.delay(0.85, function()
 			label:Destroy()
 		end)
@@ -100,7 +102,7 @@ function CombatView.build(parent: Instance): View
 			stroke = if mine then Theme.colors.good else Theme.colors.bad,
 		})
 		Components.label({
-			Size = UDim2.new(1, -2, 0, 24), Position = UDim2.fromOffset(1, 8), Text = desc.name, TextSize = 13, TextWrapped = true,
+			Size = UDim2.new(1, -2, 0, 24), Position = UDim2.fromOffset(1, 8), Text = desc.name, TextSize = 11, TextWrapped = true,
 			TextColor3 = Color3.new(0, 0, 0), ZIndex = 12, Parent = unitFrame,
 		})
 		local hp = Components.bar({ Size = UDim2.new(1, -4, 0, 9), Position = UDim2.new(0, 2, 1, -23), fillColor = if mine then Theme.colors.good else Theme.colors.bad, ZIndex = 12, Parent = unitFrame })
@@ -114,6 +116,7 @@ function CombatView.build(parent: Instance): View
 		setHp(widget, desc.hp)
 		mana.set((desc.mana or 0) / widget.maxMana)
 		widgets[desc.id] = widget
+		teamOf[desc.id] = desc.team
 	end
 
 	local function setMana(widget: Widget, mana: number?)
@@ -127,6 +130,7 @@ function CombatView.build(parent: Instance): View
 			Components.clear(arena, { UICorner = true, UIStroke = true })
 			Components.create("Frame", { Size = UDim2.new(1, 0, 0, 3), Position = UDim2.fromOffset(0, height / 2 - 1), BackgroundColor3 = Theme.colors.panelLight, BorderSizePixel = 0, Parent = arena })
 			table.clear(widgets)
+			table.clear(teamOf)
 			flip = ev.home ~= StateStore.userId
 			startedAt = StateStore.serverNow()
 			running = true
@@ -137,8 +141,8 @@ function CombatView.build(parent: Instance): View
 		end
 		local widget = widgets[ev.unit or ev.target]
 		if ev.e == "Summon" then
-			local owner = widgets[ev.owner]
-			addUnit({ id = ev.unit, team = if owner then owner.team else "home", name = ev.name, token = true, col = ev.col, row = ev.row, hp = ev.hp, maxHp = ev.hp })
+			local ownerTeam = teamOf[ev.owner]
+			addUnit({ id = ev.unit, team = ownerTeam or "home", name = ev.name, token = true, col = ev.col, row = ev.row, hp = ev.hp, maxHp = ev.hp })
 		elseif not widget then
 			return
 		elseif ev.e == "Move" then
@@ -171,9 +175,14 @@ function CombatView.build(parent: Instance): View
 				end)
 			end
 		elseif ev.e == "Death" then
+			-- The unit leaves the board: its bars go to zero for a blink, then it is removed. Later events for
+			-- it (a stale move, say) find no widget and are ignored.
+			widgets[ev.unit] = nil
 			widget.alive = false
 			setHp(widget, 0)
-			widget.frame.BackgroundTransparency = 0.7
+			task.delay(0.15, function()
+				widget.frame:Destroy()
+			end)
 		end
 	end
 

@@ -1,6 +1,7 @@
 --!strict
 -- Unit info card: stats, ability text for the unit's current star, traits and items, with Sell
--- (the tap route for selling) and tap-to-unequip (GDD 12.2, 12.3). Shown while a unit is selected.
+-- (the tap route for selling) and its items: tap one to read what it does, then Take off in the item
+-- panel (GDD 12.2, 12.3). Shown while a unit is selected.
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local EconomyConfig = require(Shared.Config.EconomyConfig)
@@ -9,6 +10,7 @@ local BaseStats = require(Shared.Util.BaseStats)
 local Theme = require(script.Parent.Theme)
 local Components = require(script.Parent.Components)
 local Actions = require(script.Parent.Actions)
+local UnitPortrait = require(script.Parent.UnitPortrait)
 local Selection = require(script.Parent.Selection)
 local DragController = require(script.Parent.DragController)
 local ItemIcon = require(script.Parent.ItemIcon)
@@ -102,6 +104,10 @@ function UnitCard.build(parent: Instance): View
 		Components.clear(body, { UIListLayout = true })
 		Components.clear(itemsRow, { UIListLayout = true })
 
+		local portrait = Components.create("Frame", { Size = UDim2.new(1, -8, 0, 150), BackgroundTransparency = 1, LayoutOrder = 0, ZIndex = 22, Parent = body })
+		if not UnitPortrait.attach(portrait, def, 22) then
+			portrait:Destroy() -- no model yet: the card is just text
+		end
 		local stats = BaseStats.resolve(def.cost, def.archetype, unit.s)
 		local traits = {}
 		for _, id in def.traits do
@@ -122,7 +128,7 @@ function UnitCard.build(parent: Instance): View
 			if item.e == unit.u then
 				local icon = ItemIcon.tile(itemsRow, item.i, 76)
 				DragController.attach(icon, { kind = "equipped", uid = item.u }, function()
-					Actions.unequipItem(item.u)
+					Selection.inspectItem(item.u) -- shows its effects; "Take off" is in the item panel
 				end)
 			end
 		end

@@ -12,6 +12,7 @@ local CombatPlayback = require(script.Parent.Combat.CombatPlayback)
 local EffectRunner = require(script.Parent.Effects.EffectRunner)
 local InventoryService = require(script.Parent.Items.InventoryService)
 local BotController = require(script.Parent.Bots.BotController)
+local ModelLoader = require(script.Parent.Combat.ModelLoader)
 
 -- Creates the Remotes folder (GDD 3.5). Clients wait for it by name.
 local function createRemotes(): Replicator.Remotes
@@ -38,6 +39,7 @@ local function now(): number
 	return workspace:GetServerTimeNow()
 end
 
+ModelLoader.load() -- models that name a Roblox asset id are loaded into ReplicatedStorage/UnitModels
 local remotes = createRemotes()
 local match = MatchService.new({
 	lobbySize = GameConfig.lobbySize,

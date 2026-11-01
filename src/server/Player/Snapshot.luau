@@ -59,7 +59,7 @@ function Snapshot.build(match: any, userId: number): { [string]: any }
 		items = items,
 		players = scoreboard,
 		place = match.placements[userId],
-		offer = if offer then { kind = offer.kind, choices = offer.choices, rerolled = offer.rerolled } else nil,
+		offer = if offer then { kind = offer.kind, choices = offer.choices, rerolled = offer.rerolled, rarity = offer.rarity } else nil,
 		carousel = carousel,
 		income = state.lastIncome,
 	}

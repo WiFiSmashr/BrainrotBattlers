@@ -1,5 +1,5 @@
 --!strict
--- Augment offers and picks (GDD 10; AUG-01 to AUG-08). Offers and follow-up choices are kept in
+-- Augment offers and picks (GDD 10; AUG-01 to AUG-08, rarity per D-59). Offers and follow-up choices are kept in
 -- state.augmentOffer. Numbers come from GameConfig and the augments' data params.
 
 local Shared = game:GetService("ReplicatedStorage").Shared
@@ -23,43 +23,32 @@ local MAX_ATTEMPTS = 200
 
 local AugmentService = {}
 
--- Rolls a rarity from an offer's weights (AUG-03).
-local function rollRarity(weights: { [string]: number }, rng: Rng): string
-	local roll = rng:nextInt(1, 100)
+-- Rolls the rarity of a whole offer from the configured weights (equal: 1/3 each, D-59).
+local function rollRarity(rng: Rng): string
+	local weights = GameConfig.augmentRarityWeights
+	local total = 0
+	for _, rarity in RARITIES do
+		total += weights[rarity]
+	end
+	local roll = rng:nextInt(1, total)
 	for _, rarity in RARITIES do
 		roll -= weights[rarity]
 		if roll <= 0 then
 			return rarity
 		end
 	end
-	return "Bronze"
+	return RARITIES[1]
 end
 
--- Augments of a rarity that the player does not own and that are not already in `taken` (AUG-04).
-local function candidates(state: PlayerState.State, rarity: string, taken: { string }): { string }
+-- Augments of a rarity that the player does not own and that are not in `avoid` (AUG-04).
+local function candidates(state: PlayerState.State, rarity: string, avoid: { string }): { string }
 	local list = {}
 	for _, a in Augments do
-		if a.rarity == rarity and not table.find(state.augments, a.id) and not table.find(taken, a.id) then
+		if a.rarity == rarity and not table.find(state.augments, a.id) and not table.find(avoid, a.id) then
 			table.insert(list, a.id)
 		end
 	end
 	return list
-end
-
--- One choice: roll the rarity, then pick an augment of that rarity; if that rarity is used up,
--- fall back to the other rarities in order.
-local function rollChoice(state: PlayerState.State, weights: { [string]: number }, taken: { string }, rng: Rng): string?
-	local rarity = rollRarity(weights, rng)
-	local list = candidates(state, rarity, taken)
-	if #list == 0 then
-		for _, other in RARITIES do
-			list = candidates(state, other, taken)
-			if #list > 0 then
-				break
-			end
-		end
-	end
-	return rng:pick(list) :: string?
 end
 
 local function allSamePrimary(choices: { string }): boolean
@@ -71,32 +60,70 @@ local function allSamePrimary(choices: { string }): boolean
 	return true
 end
 
--- Rolls 3 distinct, unowned choices that do not all share a primary category (AUG-03, AUG-04).
-local function rollChoices(state: PlayerState.State, offer: number, rng: Rng, avoid: { string }?): { string }
-	local weights = GameConfig.augmentRarityWeights[offer]
-	for attempt = 1, MAX_ATTEMPTS do
-		local choices: { string } = {}
-		local taken: { string } = if avoid and attempt < MAX_ATTEMPTS // 2 then table.clone(avoid) else {}
-		for _ = 1, GameConfig.augmentChoices do
-			local id = rollChoice(state, weights, taken, rng)
-			if id then
-				table.insert(choices, id)
-				table.insert(taken, id)
-			end
+-- Three distinct choices of one rarity that do not all share a primary category (AUG-04), or nil.
+local function pickThree(state: PlayerState.State, rarity: string, rng: Rng, avoid: { string }): { string }?
+	local pool = candidates(state, rarity, avoid)
+	if #pool < GameConfig.augmentChoices then
+		return nil
+	end
+	for _ = 1, MAX_ATTEMPTS do
+		local shuffled = rng:shuffle(pool)
+		local choices = {}
+		for i = 1, GameConfig.augmentChoices do
+			choices[i] = shuffled[i]
 		end
-		if #choices == GameConfig.augmentChoices and not allSamePrimary(choices) then
+		if not allSamePrimary(choices) then
 			return choices
+		end
+	end
+	return nil
+end
+
+-- Rolls the offer's rarity (or keeps `rarity`) and three choices of it. If that rarity cannot fill an
+-- offer it falls through to the next one. `avoid` keeps a reroll from repeating what was just shown
+-- when there is any alternative.
+local function rollOffer(state: PlayerState.State, rng: Rng, avoid: { string }, rarity: string?): (string, { string })
+	local first = rarity or rollRarity(rng)
+	local start = table.find(RARITIES, first) :: number
+	for step = 0, #RARITIES - 1 do
+		local r = RARITIES[(start - 1 + step) % #RARITIES + 1]
+		-- Prefer augments never shown to this player, then ones not in `avoid`, then anything unowned.
+		local fresh = table.clone(avoid)
+		for _, id in state.seenAugments do
+			table.insert(fresh, id)
+		end
+		local choices = pickThree(state, r, rng, fresh) or pickThree(state, r, rng, avoid) or pickThree(state, r, rng, {})
+		if choices then
+			return r, choices
 		end
 	end
 	error("could not build a valid augment offer") -- the data test guarantees this cannot happen
 end
 
--- Deals the offer for an augment round to a player (AUG-01).
-function AugmentService.deal(state: PlayerState.State, offer: number, rng: Rng)
-	state.augmentOffer = { kind = "augment", choices = rollChoices(state, offer, rng, nil), offer = offer, rerolled = false }
+-- Remembers that these augments were shown, so they are not offered to this player again if avoidable.
+local function markSeen(state: PlayerState.State, ids: { string })
+	for _, id in ids do
+		if not table.find(state.seenAugments, id) then
+			table.insert(state.seenAugments, id)
+		end
+	end
 end
 
--- Replaces all 3 choices once per offer, free of charge (AUG-05).
+-- Rolls the rarity for one augment round. The match rolls it once so every player sees the same one.
+function AugmentService.rollRarity(rng: Rng): string
+	return rollRarity(rng)
+end
+
+-- Deals the offer for an augment round to a player (AUG-01). The rarity is rolled first and is the
+-- same for all three choices. Pass `rarity` to share the round's rarity; without it this player rolls their own.
+function AugmentService.deal(state: PlayerState.State, offer: number, rng: Rng, rarity: string?)
+	local dealt, choices = rollOffer(state, rng, {}, rarity)
+	state.augmentOffer = { kind = "augment", rarity = dealt, choices = choices, offer = offer, rerolled = false }
+	markSeen(state, choices)
+end
+
+-- Replaces all 3 choices once per offer, free of charge (AUG-05). The rarity stays the same, so the
+-- reroll changes which augments you see, not how rare they are.
 function AugmentService.reroll(state: PlayerState.State, rng: Rng): PlayerState.Result
 	local offer = state.augmentOffer
 	if not offer or offer.kind ~= "augment" then
@@ -105,7 +132,8 @@ function AugmentService.reroll(state: PlayerState.State, rng: Rng): PlayerState.
 	if offer.rerolled then
 		return { ok = false, reason = "AlreadyRerolled" }
 	end
-	offer.choices = rollChoices(state, offer.offer :: number, rng, offer.choices)
+	offer.rarity, offer.choices = rollOffer(state, rng, offer.choices, offer.rarity)
+	markSeen(state, offer.choices)
 	offer.rerolled = true
 	return { ok = true }
 end

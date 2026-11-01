@@ -130,4 +130,25 @@ return function(t)
 		end
 		t.truthy(attacks > 0 and damages > 0)
 	end)
+
+	t.test("item details list stats, recipe and effect for every item", function()
+		local ItemText = require(Shared.Util.ItemText)
+		local Index = require(Shared.Util.Index)
+		local Items = require(Shared.Data.Items)
+		t.eq(table.concat(ItemText.statLines(Index.item("club") :: any), "|"), "+15 Attack Damage")
+		t.eq(table.concat(ItemText.statLines(Index.item("boots") :: any), "|"), "+15% Attack Speed")
+		t.eq(table.concat(ItemText.statLines(Index.item("gooey_heart") :: any), "|"), "+150 Health|+20 Ability Power")
+		t.eq(ItemText.recipe(Index.item("giga_chonk") :: any), "Chonky Club + Chonky Club")
+		t.eq(ItemText.recipe(Index.item("club") :: any), nil)
+		local giga = ItemText.describe(Index.item("giga_chonk") :: any)
+		t.truthy(giga:find("Combined item") and giga:find("Made from") and giga:find("Every 3rd auto attack"))
+		t.truthy(ItemText.describe(Index.item("wand") :: any):find("Component"))
+		for _, def in Items do
+			local text = ItemText.describe(def)
+			t.truthy(#text > 10, def.id)
+			if def.kind == "Combined" then
+				t.truthy(text:find(def.description, 1, true), def.id .. " should show what it does")
+			end
+		end
+	end)
 end

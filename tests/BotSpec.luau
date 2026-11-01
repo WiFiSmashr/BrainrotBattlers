@@ -204,4 +204,63 @@ return function(t)
 		end
 		t.truthy(GameConfig.fillWithBots)
 	end)
+
+	t.test("a bot fuses two loose components and equips the result on a board unit", function()
+		local match, bots = setup(2)
+		local bot = match:getPlayer(-1)
+		bot.units, bot.inventory = {}, {}
+		bot.level = 2
+		bot.gold = 0
+		local unit = PlayerState.newUnit(bot, "noodle_nugget", 1, nil, { col = 4, row = 4 })
+		PlayerState.newItem(bot, "club")
+		PlayerState.newItem(bot, "wand")
+		BotController.think(bots, -1) -- combine
+		local made
+		for _, item in bot.inventory do
+			made = item
+		end
+		t.eq(made.itemId, "chaos_wand")
+		BotController.think(bots, -1) -- equip
+		t.eq(made.equippedTo, unit.uid)
+	end)
+
+	t.test("bots spread items over their board units and never exceed 3 per unit (ITM-01)", function()
+		local match, bots = setup(2)
+		local bot = match:getPlayer(-1)
+		bot.units, bot.inventory = {}, {}
+		bot.level = 2
+		bot.gold = 0
+		local a = PlayerState.newUnit(bot, "noodle_nugget", 1, nil, { col = 4, row = 4 })
+		local b = PlayerState.newUnit(bot, "pocket_pharaoh", 1, nil, { col = 3, row = 4 })
+		for _ = 1, 8 do
+			PlayerState.newItem(bot, "brick_wall") -- loose combined items cannot be fused again
+		end
+		for _ = 1, 12 do
+			BotController.think(bots, -1)
+		end
+		t.eq(#PlayerState.itemsOn(bot, a.uid), 3)
+		t.eq(#PlayerState.itemsOn(bot, b.uid), 3)
+		local loose = 0
+		for _, item in bot.inventory do
+			if not item.equippedTo then
+				loose += 1
+			end
+		end
+		t.eq(loose, 2)
+	end)
+
+	t.test("a bot does not equip items onto bench units", function()
+		local match, bots = setup(2)
+		local bot = match:getPlayer(-1)
+		bot.units, bot.inventory = {}, {}
+		bot.level = 1
+		bot.gold = 0
+		PlayerState.newUnit(bot, "noodle_nugget", 1, nil, { col = 4, row = 4 })
+		local benched = PlayerState.newUnit(bot, "sleepy_sock", 1, 1, nil)
+		PlayerState.newItem(bot, "brick_wall")
+		for _ = 1, 4 do
+			BotController.think(bots, -1)
+		end
+		t.eq(#PlayerState.itemsOn(bot, benched.uid), 0)
+	end)
 end

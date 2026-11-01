@@ -12,8 +12,10 @@ local Actions = require(script.Parent.Parent.UI.Actions)
 local Selection = require(script.Parent.Parent.UI.Selection)
 local DragController = require(script.Parent.Parent.UI.DragController)
 local ItemIcon = require(script.Parent.Parent.UI.ItemIcon)
+local UnitPortrait = require(script.Parent.Parent.UI.UnitPortrait)
 
 local CELL, GAP = Theme.cell, 4
+local BENCH_DROP = 74 -- extra gap under the board, so the combat arena fits above the bench
 local COLUMNS, ROWS, BENCH = GameConfig.boardColumns, GameConfig.boardRows, GameConfig.benchSlots
 
 local BoardView = {}
@@ -42,6 +44,9 @@ local function makeTile(parent: Instance, unit: { [string]: any }, items: { { [s
 		Name = "Tile", Size = UDim2.fromScale(1, 1), AutoButtonColor = false, Text = "", Parent = parent,
 		BackgroundColor3 = if def and def.tint then def.tint else Theme.colors.panelLight, ZIndex = 5, radius = 8,
 	})
+	if def then
+		UnitPortrait.attach(tile, def, 5) -- shows the 3D model when the unit has one
+	end
 	local stroke = Instance.new("UIStroke")
 	stroke.Color = if selected then Color3.new(1, 1, 1) else (if def then Theme.costColor(def.cost) else Theme.colors.textDim)
 	stroke.Thickness = if selected then 6 else 4
@@ -93,7 +98,11 @@ local function makeSlot(parent: Instance, position: UDim2, dest: Dest, color: Co
 	return slot
 end
 
-export type View = { frame: Frame, render: (snapshot: { [string]: any }) -> () }
+export type View = {
+	frame: Frame,
+	render: (snapshot: { [string]: any }) -> (),
+	setCombat: (inCombat: boolean) -> (), -- during combat only the bench stays visible
+}
 
 -- Builds the board area into `parent`.
 function BoardView.build(parent: Instance): View
@@ -103,7 +112,7 @@ function BoardView.build(parent: Instance): View
 	local sellWidth = 150
 
 	local frame = Components.create("Frame", {
-		Name = "BoardView", Size = UDim2.fromOffset(benchWidth + 16 + sellWidth, 130 + boardHeight + CELL + 20),
+		Name = "BoardView", Size = UDim2.fromOffset(benchWidth + 16 + sellWidth, 34 + boardHeight + 14 + BENCH_DROP + CELL + 4),
 		AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 104), BackgroundTransparency = 1, Parent = parent,
 	})
 
@@ -126,7 +135,7 @@ function BoardView.build(parent: Instance): View
 		end
 	end
 
-	local benchY = 34 + boardHeight + 14
+	local benchY = 34 + boardHeight + 14 + BENCH_DROP
 	local benchLabel = Components.label({
 		Size = UDim2.fromOffset(benchWidth, 24), Position = UDim2.fromOffset(0, benchY - 22), Text = "Bench", TextSize = 18,
 		TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Theme.colors.textDim, Parent = frame,
@@ -206,7 +215,15 @@ function BoardView.build(parent: Instance): View
 		benchLabel.TextColor3 = if benchCount >= BENCH then Theme.colors.bad else Theme.colors.textDim
 	end
 
-	return { frame = frame, render = render }
+	-- The bench (and the units on it) stays on screen during combat so purchases are visible; the board,
+	-- counter and sell zone are only shown while you can use them.
+	local function setCombat(inCombat: boolean)
+		board.Visible = not inCombat
+		counter.Visible = not inCombat
+		sell.Visible = not inCombat
+	end
+
+	return { frame = frame, render = render, setCombat = setCombat }
 end
 
 return BoardView
