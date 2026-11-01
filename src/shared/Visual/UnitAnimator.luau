@@ -49,8 +49,9 @@ local function loadTracks(model: Model, set: Types.AnimationSet): { [string]: An
 	end
 	local controller: Instance? = model:FindFirstChildWhichIsA("Humanoid", true) or model:FindFirstChildWhichIsA("AnimationController", true)
 	if not controller then
-		controller = Instance.new("AnimationController")
-		(controller :: Instance).Parent = model
+		local created = Instance.new("AnimationController")
+		created.Parent = model
+		controller = created
 	end
 	local animator = (controller :: Instance):FindFirstChildOfClass("Animator")
 	if not animator then
