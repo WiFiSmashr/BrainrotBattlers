@@ -67,6 +67,55 @@ return function(t)
 		end
 	end)
 
+	t.test("a drained tier is left out of the roll, so a slot is never empty while the pool has units (D-82)", function()
+		local rng = Rng.new(99)
+		local pool = UnitPool.new(Units, 4)
+		for _, id in pool.idsByCost[1] do
+			pool.counts[id] = 0
+		end
+		-- Level 3 rolls cost 1 (75%) or 2 (25%): with cost 1 gone every slot is cost 2.
+		for _ = 1, 200 do
+			local defId = ShopService.rollSlot(pool, rng, 3)
+			t.truthy(defId ~= nil, "no empty slot")
+			t.eq(pool.costOf[defId :: string], 2)
+			UnitPool.put(pool, defId :: string)
+		end
+		-- Level 1 rolls only cost 1: with it gone the nearest tier with copies is used.
+		for _ = 1, 50 do
+			local defId = ShopService.rollSlot(pool, rng, 1)
+			t.truthy(defId ~= nil, "no empty slot at level 1")
+			t.eq(pool.costOf[defId :: string], 2)
+			UnitPool.put(pool, defId :: string)
+		end
+	end)
+
+	t.test("the odds renormalise over the tiers that still have copies", function()
+		local rng = Rng.new(5)
+		local pool = UnitPool.new(Units, 8)
+		for _, id in pool.idsByCost[3] do
+			pool.counts[id] = 0
+		end
+		-- Level 6: 30 / 40 / 25 / 5 / 0 with cost 3 gone leaves 30 / 40 / 5, i.e. 40% / 53.3% / 6.7%.
+		local counts = { 0, 0, 0, 0, 0 }
+		for _ = 1, 10000 do
+			local defId = ShopService.rollSlot(pool, rng, 6) :: string
+			counts[pool.costOf[defId]] += 1
+			UnitPool.put(pool, defId)
+		end
+		t.eq(counts[3], 0)
+		t.near(counts[1] / 100, 40, 2)
+		t.near(counts[2] / 100, 53.3, 2)
+		t.near(counts[4] / 100, 6.7, 1.5)
+	end)
+
+	t.test("only a completely empty pool gives an empty slot", function()
+		local pool = UnitPool.new(Units, 4)
+		for id in pool.counts do
+			pool.counts[id] = 0
+		end
+		t.eq(ShopService.rollSlot(pool, Rng.new(1), 5), nil)
+	end)
+
 	t.test("refresh fills 5 slots, takes from the pool, and a lock holds the shop", function()
 		local pool, state = newGame(4)
 		local rng = Rng.new(1)

@@ -18,30 +18,62 @@ export type BuyResult = { ok: boolean, reason: string?, unitUid: number?, merges
 
 local ShopService = {}
 
--- Rolls one cost tier from the level's odds row (SHOP-01).
-local function rollTier(rng: Rng, level: number): number
+-- Rolls one cost tier from the level's odds row (SHOP-01). Tiers with no copies left in the pool are
+-- left out of the roll and the remaining odds are used as they are, so a drained tier never leaves an
+-- empty slot while the pool still has units (D-82). If every tier the level can roll is drained, the
+-- nearest tier that still has copies is used, lower tiers first. Returns nil only when the pool is empty.
+local function rollTier(pool: UnitPool.Pool, rng: Rng, level: number): number?
 	local row = ShopConfig.odds[math.min(level, GameConfig.maxLevel)]
-	local roll = rng:nextInt(1, 100)
+	local weights: { [number]: number } = {}
+	local total = 0
 	for cost, pct in row do
-		roll -= pct
-		if roll <= 0 then
-			return cost
+		if pct > 0 and UnitPool.remainingOfCost(pool, cost) > 0 then
+			weights[cost] = pct
+			total += pct
 		end
 	end
-	return 1
-end
-
--- Rolls one slot and takes the copy from the pool (SHOP-01, SHOP-02, SHOP-05).
--- Falls back to lower tiers when the rolled tier is empty; returns nil for an empty slot.
-function ShopService.rollSlot(pool: UnitPool.Pool, rng: Rng, level: number): string?
-	for cost = rollTier(rng, level), 1, -1 do
-		local defId = UnitPool.pick(pool, cost, rng)
-		if defId then
-			UnitPool.take(pool, defId)
-			return defId
+	if total > 0 then
+		local roll = rng:nextInt(1, total)
+		for cost = 1, #row do
+			local pct = weights[cost]
+			if pct then
+				roll -= pct
+				if roll <= 0 then
+					return cost
+				end
+			end
+		end
+	end
+	-- Nothing the odds allow is left: take the closest tier with copies.
+	local top = 1
+	for cost, pct in row do
+		if pct > 0 then
+			top = math.max(top, cost)
+		end
+	end
+	for distance = 0, #row do
+		for _, cost in { top - distance, top + distance } do
+			if cost >= 1 and cost <= #row and UnitPool.remainingOfCost(pool, cost) > 0 then
+				return cost
+			end
 		end
 	end
 	return nil
+end
+
+-- Rolls one slot and takes the copy from the pool (SHOP-01, SHOP-02, SHOP-05): first the cost tier,
+-- then a unit of that tier weighted by the copies remaining. Returns nil for an empty slot, which only
+-- happens when the whole pool is empty.
+function ShopService.rollSlot(pool: UnitPool.Pool, rng: Rng, level: number): string?
+	local cost = rollTier(pool, rng, level)
+	if not cost then
+		return nil
+	end
+	local defId = UnitPool.pick(pool, cost, rng)
+	if defId then
+		UnitPool.take(pool, defId)
+	end
+	return defId
 end
 
 -- Returns every unbought shop copy to the pool and clears the slots (SHOP-02).

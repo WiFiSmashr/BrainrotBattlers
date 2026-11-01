@@ -393,7 +393,7 @@ Each shop slot first rolls a cost tier using these percentages. Every row MUST s
 - **SHOP-02.** Copies shown in a shop are removed from the pool immediately. Unbought copies return to the pool when the shop refreshes or the player leaves.
 - **SHOP-03.** The shop refreshes automatically at the start of every Prep, after income is paid, unless the player has locked it.
 - **SHOP-04.** A manual reroll costs 2 gold `[CONFIG]`. A lock toggle holds the current shop across rounds until unlocked.
-- **SHOP-05.** If the rolled tier has no copies left, fall back to the next lower tier. If all tiers are empty, show an empty slot.
+- **SHOP-05.** (D-82.) The tier is rolled from the level odds among the tiers that still have copies, then the unit is rolled by copies remaining within it. If every tier the level can roll is drained, the nearest tier with copies is used, lower first. A slot is empty only when the whole pool is empty.
 - **SHOP-06.** A purchase is rejected if the bench is full, unless the purchase completes a star-up merge that frees space. If the bench is full, the player owns exactly one star-1 copy of a unit and the shop shows another copy, buying either one buys both, charges both prices and completes the merge (D-54).
 - **SHOP-07.** The server rolls the shop. The client displays it and sends only slot indices.
 
@@ -855,7 +855,7 @@ The UI is a thin, phone-friendly view of server state: it renders what the serve
 | Shop | 5 slots showing name, cost, traits and rarity color, over the character's artwork (`Shared/Data/Portraits`) or, without art, its model (D-80). A slot is outlined teal and tagged "OWNED xN" when you already own a copy, and outlined gold and tagged "STAR UP" when buying it completes a merge. Buttons: Reroll (2), Buy XP (4), Lock. Slots grey out when unaffordable. |
 | Board and bench | In the 3D world, not a panel: your 7×4 board and 9-slot bench are models on your plot. The economy bar shows "Units x / y" and "Bench x / y". Dragging a unit onto the shop sells it. Monsters of a PvE round stand on the far half during Prep (D-67, D-68). |
 | Item inventory | Components and combined items. Combine mode via drag or tap-tap. Items show as small icons on units. Tapping an item shows a details box (kind, recipe, stats, effect); tapping two components shows the item they would fuse into before Combine is pressed (D-56, D-60). |
-| Trait panel | One row per trait on the board, with icon, count, tier pips, and next breakpoint. Active traits sort first. Tapping a row shows its tier text. |
+| Trait panel | One row per trait on the board, with icon, count, tier pips, and next breakpoint. Active traits sort first. Tapping a row shows its tier text and small portraits of every unit with that trait, dimmed unless on your board (D-81). |
 | Unit info card | Opens on tap or long-press: stats, ability text for the current star, traits, and items. |
 | Augment picker | Modal with 3 cards, rarity-colored, with a Reroll button and a countdown. Cannot be dismissed without choosing. |
 | Income popup | Shows the itemized income breakdown for 2 seconds at the start of Prep (rule ECON-02). |
