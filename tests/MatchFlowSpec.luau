@@ -80,7 +80,7 @@ return function(t)
 		t.eq(RoundSchedule.prepSeconds(RoundSchedule.info(1, 1)), 20)
 		t.eq(RoundSchedule.prepSeconds(RoundSchedule.info(2, 2)), 25)
 		t.eq(RoundSchedule.prepSeconds(RoundSchedule.info(2, 1)), 40)
-		t.eq(RoundSchedule.carouselSeconds(8), 35)
+		t.eq(RoundSchedule.carouselSeconds(8), 83)
 	end)
 
 	-- PvE monsters ------------------------------------------------------------------------------
@@ -188,15 +188,15 @@ return function(t)
 	-- MatchService ---------------------------------------------------------------------------------
 	t.test("solo match plays 1-1 through 2-3 on schedule (acceptance)", function()
 		local match, clock, log = harness(1, 4)
-		advanceTo(match, clock, 215)
+		advanceTo(match, clock, 221)
 		local expected = {
 			"1-1:MatchStart:3", "1-1:Prep:23", "1-1:Combat:28", "1-1:Resolve:32",
 			"1-2:Prep:57", "1-2:Combat:62", "1-2:Resolve:66",
-			"1-3:Carousel:73", "1-3:Prep:98",
-			"1-4:Prep:123", "1-4:Combat:128", "1-4:Resolve:132",
-			"2-1:Prep:172", "2-1:Combat:177", "2-1:Resolve:181",
-			"2-2:Prep:206", "2-2:Combat:211", "2-2:Resolve:215",
-			"2-3:Prep:240",
+			"1-3:Carousel:79", "1-3:Prep:104",
+			"1-4:Prep:129", "1-4:Combat:134", "1-4:Resolve:138",
+			"2-1:Prep:178", "2-1:Combat:183", "2-1:Resolve:187",
+			"2-2:Prep:212", "2-2:Combat:217", "2-2:Resolve:221",
+			"2-3:Prep:246",
 		}
 		t.eq(table.concat(log, " "), table.concat(expected, " "))
 		t.eq(match.phase, "Prep")

@@ -11,6 +11,7 @@ local Theme = require(script.Parent.Theme)
 local Components = require(script.Parent.Components)
 local Actions = require(script.Parent.Actions)
 local Selection = require(script.Parent.Selection)
+local StateStore = require(script.Parent.Parent.StateStore)
 local DragController = require(script.Parent.DragController)
 local ItemIcon = require(script.Parent.ItemIcon)
 
@@ -35,7 +36,7 @@ function InventoryPanel.build(parent: Instance): View
 		Name = "InventoryPanel", Size = UDim2.fromOffset(300, 740), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -8, 0, 108),
 		Parent = parent,
 	})
-	Components.label({ Size = UDim2.new(1, 0, 0, 40), Text = "Items", TextSize = 30, Parent = frame })
+	local title = Components.label({ Size = UDim2.new(1, 0, 0, 40), Text = "Items", TextSize = 30, Parent = frame })
 	local grid = Components.scroll({ Size = UDim2.new(1, -12, 0, 288), Position = UDim2.fromOffset(6, 44), Parent = frame })
 	Components.create("UIGridLayout", {
 		CellSize = UDim2.fromOffset(TILE, TILE), CellPadding = UDim2.fromOffset(6, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = grid,
@@ -88,7 +89,45 @@ function InventoryPanel.build(parent: Instance): View
 		end,
 	})
 
+	local scoutShown: string? = nil -- the item whose details show while scouting (UI-local)
+
+	-- Scouting (D-83): shows the other player's loose items, read-only. Returns true if it drew them.
+	local function renderScouted(snapshot: { [string]: any }): boolean
+		local who = nil
+		for _, p in snapshot.players do
+			if p.id == StateStore.scouting then
+				who = p
+			end
+		end
+		combine.Visible = who == nil
+		if not who then
+			title.Text = "Items"
+			return false
+		end
+		title.Text = who.n .. "'s items"
+		hint.Text = if #who.inv == 0 then "No loose items." else "Items on their units show over the units."
+		takeOff.Visible = false
+		local def = if scoutShown then Index.item(scoutShown) else nil
+		detailName.Text = if def then def.name else "Item details"
+		detailText.Text = if def then ItemText.describe(def) else "Tap an item to see what it does."
+		Components.clear(grid, { UIGridLayout = true })
+		for order, itemId in who.inv do
+			local tile = ItemIcon.tile(grid, itemId, TILE)
+			tile.LayoutOrder = order
+			tile.Activated:Connect(function()
+				scoutShown = itemId
+				detailName.Text = ItemIcon.name(itemId)
+				local shown = Index.item(itemId)
+				detailText.Text = if shown then ItemText.describe(shown) else ""
+			end)
+		end
+		return true
+	end
+
 	local function render(snapshot: { [string]: any })
+		if renderScouted(snapshot) then
+			return
+		end
 		local loose = {}
 		local ids: { [number]: string } = {}
 		for _, item in snapshot.items do

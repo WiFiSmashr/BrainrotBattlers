@@ -66,7 +66,7 @@ function CombatSim.new(setup: Setup): any
 		table.insert(sim.roster, {
 			id = u.id, team = u.team, name = u.name, defId = u.defId, token = u.isToken,
 			col = u.cell.col, row = u.cell.row, hp = u.health, maxHp = StatBlock.get(u.stats.maxHealth),
-			mana = u.mana, maxMana = u.maxMana,
+			mana = u.mana, maxMana = u.maxMana, items = u.items,
 		})
 	end
 	for _, u in sim.units do

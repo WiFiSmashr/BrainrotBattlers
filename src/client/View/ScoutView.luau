@@ -53,6 +53,20 @@ function ScoutView.build(parent: Instance): View
 		drawn = ""
 	end
 
+	local latest: { [string]: any }? = nil
+	local render
+
+	-- True while this player's fight is being played on their own plot and has reached this client: the
+	-- real units are visible there, so the still board is not drawn over them (D-84).
+	local function fightOnTheirPlot(who: { [string]: any }): boolean
+		if StateStore.phase.name ~= "Combat" then
+			return false
+		end
+		local arenas = workspace:FindFirstChild("Arenas")
+		local arena = if arenas then arenas:FindFirstChild("Arena_" .. who.id) else nil
+		return arena ~= nil and arena:FindFirstChild("Fight") ~= nil
+	end
+
 	local function target(snapshot: { [string]: any }?): { [string]: any }?
 		local id = StateStore.scouting
 		if not id or not snapshot then
@@ -66,7 +80,8 @@ function ScoutView.build(parent: Instance): View
 		return nil
 	end
 
-	local function render(snapshot: { [string]: any }?)
+	function render(snapshot: { [string]: any }?)
+		latest = snapshot
 		local who = target(snapshot)
 		banner.Visible = who ~= nil
 		if not who then
@@ -76,7 +91,8 @@ function ScoutView.build(parent: Instance): View
 		text.Text = ("%s's board and bench"):format(who.n)
 
 		-- Redraw only when their board changed.
-		local parts = { who.id }
+		local live = fightOnTheirPlot(who)
+		local parts = { who.id, tostring(live) }
 		for _, u in who.board do
 			table.insert(parts, ("%s:%d:%s:%s:%s:%s"):format(u.d, u.s, tostring(u.c), tostring(u.r), tostring(u.b), table.concat(u.i, ",")))
 		end
@@ -90,7 +106,7 @@ function ScoutView.build(parent: Instance): View
 		local origin = ArenaLayout.plotOrigin(who.seat)
 		for _, u in who.board do
 			local def = Index.unit(u.d) :: any
-			if def then
+			if def and (u.b or not live) then
 				local modelId = ModelRegistry.modelIdOf(def)
 				local visual = ModelFactory.create(modelId, { tint = def.tint })
 				visual.model.Name = "ScoutUnit"
@@ -118,6 +134,17 @@ function ScoutView.build(parent: Instance): View
 			end
 		end
 	end
+
+	-- A fight appearing on, or leaving, the scouted plot changes what should be drawn.
+	local function fightChanged(instance: Instance)
+		if instance.Name == "Fight" and StateStore.scouting then
+			render(latest)
+		end
+	end
+	workspace.DescendantAdded:Connect(fightChanged)
+	workspace.DescendantRemoving:Connect(function(instance)
+		task.defer(fightChanged, instance)
+	end)
 
 	return { render = render, target = target }
 end

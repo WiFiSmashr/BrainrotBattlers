@@ -178,28 +178,28 @@ return function(t)
 		t.eq(CarouselService.pick(c, 1, 2, 1).reason, "NotYourTurn")
 	end)
 
-	t.test("each pick has 4s; on timeout the server picks a random remaining offering (CAR-03)", function()
+	t.test("each pick has 10s; on timeout the server picks a random remaining offering (CAR-03)", function()
 		local ps = { newPlayer(1, 10), newPlayer(2, 20), newPlayer(3, 30) }
 		local c = CarouselService.new(ps, Rng.new(2), 100)
-		CarouselService.update(c, 106.9) -- intro 3s + first pick 4s ends at 107
+		CarouselService.update(c, 112.9) -- intro 3s + first pick 10s ends at 113
 		t.eq(itemCount(ps[1]), 0)
-		CarouselService.update(c, 107)
+		CarouselService.update(c, 113)
 		t.eq(itemCount(ps[1]), 1)
 		t.eq(CarouselService.currentPlayer(c), 2)
 		local free = 1
 		while c.offerings[free].pickedBy do
 			free += 1
 		end
-		CarouselService.pick(c, 2, free, 108) -- an early pick restarts the clock at 4s
-		t.near(c.turnEndsAt, 112)
-		CarouselService.update(c, 200)
+		CarouselService.pick(c, 2, free, 114) -- an early pick restarts the clock at 10s
+		t.near(c.turnEndsAt, 124)
+		CarouselService.update(c, 300)
 		for _, p in ps do
 			t.eq(itemCount(p), 1, "exactly one component each")
 		end
 	end)
 
 	-- Carousel inside a match ------------------------------------------------------------------------------
-	t.test("1-3 runs a Carousel phase of 3s + 4s per player, then Prep; no combat or damage (CAR-01, CAR-05)", function()
+	t.test("1-3 runs a Carousel phase of 3s + 10s per player, then Prep; no combat or damage (CAR-01, CAR-05)", function()
 		local match, clock = harness(4)
 		match:getPlayer(1).health, match:getPlayer(2).health, match:getPlayer(3).health, match:getPlayer(4).health = 40, 10, 70, 70
 		local log: { string } = {}
@@ -209,7 +209,7 @@ return function(t)
 		clock.t = 70
 		match:update()
 		t.eq(match.phase, "Carousel")
-		t.truthy(table.find(log, "1-3:Carousel:85") ~= nil, table.concat(log, " ")) -- 66 + 3 + 4 x 4
+		t.truthy(table.find(log, "1-3:Carousel:109") ~= nil, table.concat(log, " ")) -- 66 + 3 + 10 x 4
 		t.eq(#match.carousel.offerings, 4)
 
 		local router = ActionRouter.new(match, function() return clock.t end)
@@ -218,7 +218,7 @@ return function(t)
 		t.eq(router:handle(2, "PickCarousel", { index = 2 }).reason, "NotYourTurn")
 		t.eq(router:handle(1, "BuyUnit", { slot = 1 }).reason, "WrongPhase")
 
-		clock.t = 90
+		clock.t = 110
 		match:update()
 		t.eq(match.phase, "Prep")
 		t.eq(match.carousel, nil)

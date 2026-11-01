@@ -32,7 +32,7 @@ local GameConfig = {
 	combatMaxSeconds = 30,
 	resolveSeconds = 4,
 	carouselIntroSeconds = 3,
-	carouselPickSeconds = 4,
+	carouselPickSeconds = 10,
 
 	-- Lobby start (D-17): start when full, or after the wait with at least minPlayersToStart.
 	lobbyWaitSeconds = 10,

@@ -83,9 +83,6 @@ function Root.build()
 		pending = false
 		local snapshot = StateStore.snapshot
 		local phase = StateStore.phase.name
-		if phase == "Combat" or phase == "MatchEnd" then
-			StateStore.scouting = nil -- the fight camera takes over (D-79)
-		end
 		if StateStore.scouting ~= lastScouting then
 			lastScouting = StateStore.scouting -- set first: clearing the selection re-enters renderAll
 			Selection.clear()
@@ -118,6 +115,7 @@ function Root.build()
 		if not snapshot then
 			root.BackgroundTransparency = 0
 			combat.setActive(false)
+			combat.setSuspended(false)
 			CombatCamera.exit()
 			StateStore.scouting = nil
 			scout.render(nil)
@@ -133,9 +131,12 @@ function Root.build()
 		-- your plot (Prep, bench, board, monsters); in Combat CombatWorld moves it to the fight arena.
 		local inCombat = phase == "Combat"
 		root.BackgroundTransparency = 1
-		local who = scout.target(snapshot) -- another player's board being looked at (D-79)
-		if not inCombat then
-			CombatCamera.enter(ArenaLayout.plotOrigin(if who then who.seat else snapshot.seat), true)
+		local who = scout.target(snapshot) -- another player's board being looked at (D-79); allowed in Combat too (D-84)
+		combat.setSuspended(who ~= nil) -- the fight view steps aside while you scout, and returns afterwards
+		if who then
+			CombatCamera.enter(ArenaLayout.plotOrigin(who.seat), true)
+		elseif not inCombat then
+			CombatCamera.enter(ArenaLayout.plotOrigin(snapshot.seat), true)
 		end
 		-- While scouting, your own units are not drawn on their plot.
 		plot.render(if who then { units = {}, items = {}, players = snapshot.players, seat = snapshot.seat } else snapshot)

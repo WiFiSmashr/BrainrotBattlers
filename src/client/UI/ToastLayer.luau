@@ -15,7 +15,7 @@ local ToastLayer = {}
 -- Builds the layer into `parent` and listens for toasts.
 function ToastLayer.build(parent: Instance): Frame
 	local layer = Components.create("Frame", {
-		Name = "ToastLayer", Size = UDim2.fromOffset(700, 200), AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -8),
+		Name = "ToastLayer", Size = UDim2.fromOffset(700, 200), AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -310), -- above the shop
 		BackgroundTransparency = 1, ZIndex = 80, Parent = parent,
 	})
 	Components.create("UIListLayout", {

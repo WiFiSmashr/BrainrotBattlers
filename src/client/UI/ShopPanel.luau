@@ -38,7 +38,7 @@ end
 function ShopPanel.build(parent: Instance): View
 	local width = BUTTON_WIDTH + 12 + ShopConfig.slots * SLOT_WIDTH + (ShopConfig.slots - 1) * GAP
 	local frame = Components.create("Frame", {
-		Name = "ShopPanel", Size = UDim2.fromOffset(width, SLOT_HEIGHT), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 722),
+		Name = "ShopPanel", Size = UDim2.fromOffset(width, SLOT_HEIGHT), AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -100), -- sits directly on the economy bar (96 tall) at the bottom edge
 		BackgroundTransparency = 1, Parent = parent,
 	})
 

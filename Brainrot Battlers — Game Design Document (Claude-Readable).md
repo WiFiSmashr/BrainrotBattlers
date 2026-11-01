@@ -108,7 +108,7 @@ When two designs conflict, the lower-numbered pillar wins.
 
 ### 2.5 Out of scope for the foundation
 
-Claude MUST NOT build these yet: ranked ladder, cosmetics, shop monetization, Robux purchases, chat features, tutorials, live spectating of other players' fights, and cross-server matchmaking. (Scouting another player's board and bench during Prep is in scope, see 12.2.)
+Claude MUST NOT build these yet: ranked ladder, cosmetics, shop monetization, Robux purchases, chat features, tutorials, live spectating of other players' fights, and cross-server matchmaking. (Scouting another player's board, bench and items at any time, including during Combat, is in scope, see 12.2.)
 
 ## 3. Roblox architecture
 
@@ -287,9 +287,9 @@ The carousel is a shared item pick in the middle of each stage: round 1-3 in sta
 
 - **CAR-01.** A carousel round runs the Carousel phase first, then a normal Prep (income, shop, and any augment offer that is due). It changes no streak (ECON-04).
 - **CAR-02.** The server rolls one offering per living player. Each offering is one random component. All 6 component types appear before any repeats.
-- **CAR-03.** Players pick one at a time in ascending order of current health, with random ties, so trailing players choose first. Each pick has 4 seconds `[CONFIG]`. On timeout the server picks a random remaining offering. Bots pick instantly.
+- **CAR-03.** Players pick one at a time in ascending order of current health, with random ties, so trailing players choose first. Each pick has 10 seconds `[CONFIG]` (D-84). On timeout the server picks a random remaining offering. Bots pick instantly.
 - **CAR-04.** All players see the offerings and each pick live. A picked item goes straight to that player's inventory.
-- **CAR-05.** The phase lasts a 3 second intro plus 4 seconds per living player, at most 35 seconds in an 8-player lobby.
+- **CAR-05.** The phase lasts a 3 second intro plus 10 seconds per living player, at most 83 seconds in an 8-player lobby (D-84).
 - **CAR-06.** Picks use the `PickCarousel(index)` action. The server accepts it only from the player whose turn it is (ARCH-01).
 - **CAR-07.** `CarouselService` MUST keep offering contents and turn order on the server and replicate them in `StateUpdate`.
 
@@ -859,10 +859,10 @@ The UI is a thin, phone-friendly view of server state: it renders what the serve
 | Unit info card | Opens on tap or long-press: stats, ability text for the current star, traits, and items. |
 | Augment picker | Modal with 3 cards, rarity-colored, with a Reroll button and a countdown. Cannot be dismissed without choosing. |
 | Income popup | Shows the itemized income breakdown for 2 seconds at the start of Prep (rule ECON-02). |
-| Combat view | The 3D arena seen from the fixed camera (CameraConfig), with health and mana bars over units, damage numbers, status icons, and a fight timer. The shop, economy bar and bench stay usable (D-58). |
+| Combat view | The 3D arena seen from the fixed camera (CameraConfig), with health and mana bars over units, the items each unit carries, damage numbers, status icons, and a fight timer. The shop, economy bar and bench stay usable (D-58). |
 | End screen | Placement, stats, and a Back to Menu button (D-70). |
 | Main menu | Title, a Play / Cancel button, the queue count ("In queue 2 / 4"), the start countdown and a note when a match is already running (LOBBY-04). Shown whenever the player is not in a match. |
-| Scout banner | While you look at another player's board: whose board it is and a My board button. Boards and benches are public; gold and shops are not (D-79). |
+| Scout banner | While you look at another player's board (available in every phase, including Combat, D-84): whose board it is and a My board button. Boards, benches and loose items are public; gold and shops are not (D-79, D-83). While scouting, the item panel shows their loose items. |
 | Carousel panel | Shows the shared offerings, whose turn it is, and a pick timer. Picked offerings are greyed out with the picker's name. |
 
 ### 12.3 Interactions

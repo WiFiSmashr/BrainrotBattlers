@@ -45,9 +45,23 @@ function Snapshot.build(match: any, userId: number): { [string]: any }
 				table.insert(board, { d = u.defId, s = u.star, c = if u.board then u.board.col else nil, r = if u.board then u.board.row else nil, b = u.bench, i = carried })
 			end
 		end
+		-- Loose (unequipped) items are public too, shown while scouting (D-83).
+		local loose = {}
+		for uid, item in p.inventory do
+			if not item.equippedTo then
+				table.insert(loose, { uid, item.itemId })
+			end
+		end
+		table.sort(loose, function(a, b)
+			return a[1] < b[1]
+		end)
+		local inv = {}
+		for _, entry in loose do
+			table.insert(inv, entry[2])
+		end
 		-- Chosen augments are public: shown beside each portrait (AUG-08).
 		table.insert(scoreboard, {
-			id = id, n = p.name, hp = p.health, place = match.placements[id], aug = p.augments, seat = p.seat, board = board,
+			id = id, n = p.name, hp = p.health, place = match.placements[id], aug = p.augments, seat = p.seat, board = board, inv = inv,
 		})
 	end
 

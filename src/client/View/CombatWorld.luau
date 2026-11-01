@@ -11,6 +11,7 @@ local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local GameConfig = require(Shared.Config.GameConfig)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local Components = require(script.Parent.Parent.UI.Components)
+local ItemIcon = require(script.Parent.Parent.UI.ItemIcon)
 local StateStore = require(script.Parent.Parent.StateStore)
 local CombatCamera = require(script.Parent.CombatCamera)
 
@@ -48,6 +49,7 @@ local CombatWorld = {}
 export type View = {
 	handle: (batch: { any }) -> (),
 	setActive: (active: boolean) -> (),
+	setSuspended: (suspended: boolean) -> (), -- hide the fight view while the player scouts another board (D-84)
 }
 
 -- Builds the controller. Nothing is drawn until a fight starts.
@@ -60,6 +62,7 @@ function CombatWorld.build(): View
 	local viewerIsHome = true
 	local home = 0
 	local active = false
+	local suspended = false
 	local startedAt = 0
 	local warnedMissing = false
 
@@ -85,7 +88,7 @@ function CombatWorld.build(): View
 	end)
 
 	local function refreshCamera()
-		if active and origin then
+		if active and origin and not suspended then
 			CombatCamera.enter(origin, viewerIsHome)
 		end
 	end
@@ -144,7 +147,7 @@ function CombatWorld.build(): View
 			local height = model:GetExtentsSize().Y
 			local gui = Instance.new("BillboardGui")
 			gui.Name = "UnitHud"
-			gui.Size = UDim2.fromOffset(132, 48)
+			gui.Size = UDim2.fromOffset(132, 74)
 			gui.StudsOffsetWorldSpace = Vector3.new(0, height + 0.9, 0)
 			gui.AlwaysOnTop = true
 			gui.LightInfluence = 0
@@ -154,6 +157,15 @@ function CombatWorld.build(): View
 			local mana = Components.bar({ Size = UDim2.new(1, 0, 0, 6), Position = UDim2.fromOffset(0, 42), fillColor = Theme.colors.mana, Parent = gui })
 			local tags = Components.create("Frame", { Size = UDim2.new(1, 0, 0, 12), BackgroundTransparency = 1, Parent = gui })
 			Components.create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 2), HorizontalAlignment = Enum.HorizontalAlignment.Center, Parent = tags })
+			-- The items a unit carries stay on show for the whole fight (D-83).
+			if desc.items and #desc.items > 0 then
+				local row = Components.create("Frame", { Size = UDim2.new(1, 0, 0, 22), Position = UDim2.fromOffset(0, 50), BackgroundTransparency = 1, Parent = gui })
+				Components.create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 2), HorizontalAlignment = Enum.HorizontalAlignment.Center, Parent = row })
+				for _, itemId in desc.items do
+					ItemIcon.mini(row, itemId)
+				end
+			end
+			gui.Enabled = not suspended
 			gui.Parent = part
 			local hud: Hud = {
 				gui = gui, hp = hp, mana = mana, tags = tags, maxHp = math.max(desc.maxHp or desc.hp or 1, 1), maxMana = math.max(desc.maxMana or 100, 1),
@@ -240,12 +252,25 @@ function CombatWorld.build(): View
 				apply(ev)
 			end
 		end,
+		setSuspended = function(on: boolean)
+			if on == suspended then
+				return
+			end
+			suspended = on
+			overlay.Enabled = active and not on
+			for _, hud in huds do
+				hud.gui.Enabled = not on
+			end
+			if not on then
+				refreshCamera() -- back to the fight
+			end
+		end,
 		setActive = function(on: boolean)
 			if on == active then
 				return
 			end
 			active = on
-			overlay.Enabled = on
+			overlay.Enabled = on and not suspended
 			if on then
 				refreshCamera()
 			else
