@@ -32,10 +32,10 @@ local Portraits: { [string]: string } = {
 	sir_slaysalot = "rbxassetid://133101138440089",
 	ban_hammer_bear = "rbxassetid://129305642797333",
 	spoiled_spaghetti = "rbxassetid://87278447559839",
-	-- lootbox_lemur = "rbxassetid://",
-	-- rotzilla_prime = "rbxassetid://",
-	-- grand_rizzmaster = "rbxassetid://",
-	-- granny_glitchgun = "rbxassetid://",
+	lootbox_lemur = "rbxassetid://120675305279053",
+	rotzilla_prime = "rbxassetid://128580898545669",
+	grand_rizzmaster = "rbxassetid://96383150097577",
+	granny_glitchgun = "rbxassetid://75612600371700",
 }
 
 return Portraits
