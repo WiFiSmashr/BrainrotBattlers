@@ -11,11 +11,11 @@ local BotController = require(Server.Bots.BotController)
 local LOBBY = 4
 local WAIT = 10
 
-type Rig = { session: any, clock: { t: number }, started: number, cleaned: number, sent: { [number]: { any } } }
+type Rig = { session: any, clock: { t: number }, started: number, cleaned: number, sent: { [number]: { any } }, focus: { { number } } }
 
 local function rig(): Rig
 	local clock = { t = 0 }
-	local r: Rig = { session = nil, clock = clock, started = 0, cleaned = 0, sent = {} }
+	local r: Rig = { session = nil, clock = clock, started = 0, cleaned = 0, sent = {}, focus = {} }
 	r.session = SessionService.new({
 		lobbySize = LOBBY, minPlayers = 1, waitSeconds = WAIT, fillWithBots = true,
 		now = function() return clock.t end,
@@ -32,6 +32,7 @@ local function rig(): Rig
 		fillBots = BotController.fill,
 		onStart = function() r.started += 1 end,
 		onCleanup = function() r.cleaned += 1 end,
+		focusPlot = function(userId, seat) table.insert(r.focus, { userId, seat or 0 }) end,
 		notify = function(userId, info)
 			r.sent[userId] = r.sent[userId] or {}
 			table.insert(r.sent[userId], info)
@@ -206,5 +207,22 @@ return function(t)
 		r.clock.t = WAIT
 		r.session:update()
 		t.eq(r.sent[1][#r.sent[1]].status, "InMatch")
+	end)
+
+	t.test("ScoutPlot points a player's streaming at a plot, only while they are in a match (D-89)", function()
+		local r = rig()
+		r.session:addPlayer(1, "A")
+		t.eq(r.session:handle(1, "ScoutPlot", { seat = 2 }).reason, "NotInMatch", "in the menu")
+		r.session:handle(1, "JoinQueue", {})
+		r.clock.t = WAIT
+		r.session:update()
+		t.truthy(r.session:handle(1, "ScoutPlot", { seat = 2 }).ok)
+		t.eq(r.focus[1][1], 1)
+		t.eq(r.focus[1][2], 2)
+		t.truthy(r.session:handle(1, "ScoutPlot", {}).ok, "no seat goes back to their own plot")
+		t.eq(r.focus[2][2], 0)
+		t.eq(r.session:handle(1, "ScoutPlot", { seat = 0 }).reason, "BadArgs")
+		t.eq(r.session:handle(1, "ScoutPlot", { seat = 1.5 }).reason, "BadArgs")
+		t.eq(r.session:handle(1, "ScoutPlot", { seat = "x" }).reason, "BadArgs")
 	end)
 end

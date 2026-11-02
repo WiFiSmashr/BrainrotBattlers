@@ -34,6 +34,11 @@ function Actions.leaveQueue()
 	Actions.send("LeaveQueue")
 end
 
+-- Tells the server which plot the camera is over, so it can stream it (D-89).
+function Actions.scoutPlot(seat: number?)
+	Actions.send("ScoutPlot", { seat = seat })
+end
+
 function Actions.backToMenu()
 	Actions.send("BackToMenu")
 end

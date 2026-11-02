@@ -20,6 +20,7 @@ local ScoutView = {}
 export type View = {
 	render: (snapshot: { [string]: any }?) -> (), -- draws the scouted board, or clears it
 	target: (snapshot: { [string]: any }?) -> { [string]: any }?, -- the scoreboard entry being scouted, if any
+	view: (snapshot: { [string]: any }?) -> (Vector3?, boolean?), -- where the camera goes to watch them (D-89)
 }
 
 -- Builds the view; `parent` receives the banner.
@@ -56,15 +57,17 @@ function ScoutView.build(parent: Instance): View
 	local latest: { [string]: any }? = nil
 	local render
 
-	-- True while this player's fight is being played on their own plot and has reached this client: the
-	-- real units are visible there, so the still board is not drawn over them (D-84).
-	local function fightOnTheirPlot(who: { [string]: any }): boolean
-		if StateStore.phase.name ~= "Combat" then
-			return false
+	-- Where the scouted player is shown (D-89): on their own plot, or - while they are fighting - on the plot
+	-- that hosts the fight, from behind their side of it. `live` is true then: the real fight is on screen.
+	local function placement(who: { [string]: any }, snapshot: { [string]: any }): (Vector3, boolean, boolean)
+		if StateStore.phase.name == "Combat" and who.host then
+			for _, p in snapshot.players do
+				if p.id == who.host then
+					return ArenaLayout.plotOrigin(p.seat), who.host == who.id, true
+				end
+			end
 		end
-		local arenas = workspace:FindFirstChild("Arenas")
-		local arena = if arenas then arenas:FindFirstChild("Arena_" .. who.id) else nil
-		return arena ~= nil and arena:FindFirstChild("Fight") ~= nil
+		return ArenaLayout.plotOrigin(who.seat), true, false
 	end
 
 	local function target(snapshot: { [string]: any }?): { [string]: any }?
@@ -91,8 +94,8 @@ function ScoutView.build(parent: Instance): View
 		text.Text = ("%s's board and bench"):format(who.n)
 
 		-- Redraw only when their board changed.
-		local live = fightOnTheirPlot(who)
-		local parts = { who.id, tostring(live) }
+		local origin, homeSide, live = placement(who, snapshot :: { [string]: any })
+		local parts = { who.id, tostring(live), tostring(homeSide), tostring(origin) }
 		for _, u in who.board do
 			table.insert(parts, ("%s:%d:%s:%s:%s:%s"):format(u.d, u.s, tostring(u.c), tostring(u.r), tostring(u.b), table.concat(u.i, ",")))
 		end
@@ -103,7 +106,6 @@ function ScoutView.build(parent: Instance): View
 		clear()
 		drawn = signature
 
-		local origin = ArenaLayout.plotOrigin(who.seat)
 		for _, u in who.board do
 			local def = Index.unit(u.d) :: any
 			if def and (u.b or not live) then
@@ -111,8 +113,8 @@ function ScoutView.build(parent: Instance): View
 				local visual = ModelFactory.create(modelId, { tint = def.tint })
 				visual.model.Name = "ScoutUnit"
 				visual.model.Parent = folder
-				local position = if u.b then ArenaLayout.benchPosition(origin, u.b, true) else ArenaLayout.cellPosition(origin, u.c, u.r)
-				visual:place(position, position + Vector3.new(0, 0, 10)) -- the home side faces the far half
+				local position = if u.b then ArenaLayout.benchPosition(origin, u.b, homeSide) else ArenaLayout.cellPosition(origin, u.c, u.r)
+				visual:place(position, position + Vector3.new(0, 0, if homeSide then 10 else -10)) -- each side faces the far half
 
 				local gui = Instance.new("BillboardGui")
 				gui.Size = UDim2.fromOffset(110, 40)
@@ -135,18 +137,17 @@ function ScoutView.build(parent: Instance): View
 		end
 	end
 
-	-- A fight appearing on, or leaving, the scouted plot changes what should be drawn.
-	local function fightChanged(instance: Instance)
-		if instance.Name == "Fight" and StateStore.scouting then
-			render(latest)
+	-- The plot and side the camera should look from for a scouted player, or nil when not scouting.
+	local function view(snapshot: { [string]: any }?): (Vector3?, boolean?)
+		local who = target(snapshot)
+		if not who or not snapshot then
+			return nil, nil
 		end
+		local origin, homeSide = placement(who, snapshot)
+		return origin, homeSide
 	end
-	workspace.DescendantAdded:Connect(fightChanged)
-	workspace.DescendantRemoving:Connect(function(instance)
-		task.defer(fightChanged, instance)
-	end)
 
-	return { render = render, target = target }
+	return { render = render, target = target, view = view }
 end
 
 return ScoutView

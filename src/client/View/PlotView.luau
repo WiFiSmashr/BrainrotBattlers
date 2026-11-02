@@ -41,6 +41,7 @@ export type View = {
 	render: (snapshot: { [string]: any }) -> (),
 	dragging: () -> boolean,
 	dragFinished: any, -- fired when a unit in the world is released
+	setCombatPicker: (picker: ((Vector2) -> number?)?) -> (), -- finds a board unit under the pointer during a fight (D-88)
 }
 
 -- Builds the view. Everything it creates lives in one folder in the workspace (client only).
@@ -63,6 +64,7 @@ function PlotView.build(): View
 	local pressed: any = nil -- a press on a unit or tile that may still become a tap or a drag
 	local dragEntry: any = nil
 	local dragFinished = Signal.new()
+	local combatPicker: ((Vector2) -> number?)? = nil
 	local view = { origin = nil :: Vector3?, homeSide = true, atOwnPlot = false }
 
 	-- Where a unit's slot is, for swaps and moves.
@@ -125,6 +127,12 @@ function PlotView.build(): View
 		end
 		local colText, rowText = hit.Instance.Name:match("^Tile_(%d+)_(%d+)$")
 		if colText and rowText and view.atOwnPlot and view.homeSide then
+			if StateStore.phase.name == "Combat" then
+				if Selection.unit then
+					StateStore.toast:fire("NoFieldInCombat") -- only the bench can be rearranged mid-fight (D-87)
+				end
+				return nil, nil
+			end
 			local col, row = tonumber(colText) or 0, tonumber(rowText) or 0
 			if row <= 4 then
 				return nil, { kind = "board", col = col, row = row }
@@ -343,6 +351,12 @@ function PlotView.build(): View
 		end
 		local at = Vector2.new(input.Position.X, input.Position.Y)
 		local uid, slot = classify(castAt(at))
+		if not uid and StateStore.phase.name == "Combat" and combatPicker then
+			uid = combatPicker(at) -- a unit that is busy fighting
+			if uid then
+				slot = nil
+			end
+		end
 		pressed = { input = input, start = at, uid = uid, slot = slot, dragging = false }
 	end)
 
@@ -413,6 +427,9 @@ function PlotView.build(): View
 	DragController.worldDrop = function(payload, position)
 		if payload.kind == "item" then
 			local uid = classify(castAt(position))
+			if not uid and StateStore.phase.name == "Combat" and combatPicker then
+				uid = combatPicker(position)
+			end
 			if uid then
 				Actions.equipItem(payload.uid, uid)
 				Selection.clearItems()
@@ -427,7 +444,9 @@ function PlotView.build(): View
 
 	return { render = render, dragging = function()
 		return dragEntry ~= nil
-	end, dragFinished = dragFinished }
+	end, dragFinished = dragFinished, setCombatPicker = function(picker)
+		combatPicker = picker
+	end }
 end
 
 return PlotView

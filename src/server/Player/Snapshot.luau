@@ -62,6 +62,7 @@ function Snapshot.build(match: any, userId: number): { [string]: any }
 		-- Chosen augments are public: shown beside each portrait (AUG-08).
 		table.insert(scoreboard, {
 			id = id, n = p.name, hp = p.health, place = match.placements[id], aug = p.augments, seat = p.seat, board = board, inv = inv,
+			host = if match.phase == "Combat" and match.fightHost then match.fightHost[id] else nil, -- whose plot their fight is on (D-89)
 		})
 	end
 

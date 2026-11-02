@@ -39,9 +39,11 @@ export type Deps = {
 	onStart: (run: Run) -> (), -- after match:start(): build the plots
 	onCleanup: (run: Run) -> (), -- the match is over and nobody is in it: remove the plots
 	notify: (userId: number, info: Info) -> (),
+	focusPlot: ((userId: number, seat: number?) -> ())?, -- point a player's streaming at a plot while they scout it; nil seat = their own (D-89)
 }
 
 local MENU_ACTIONS = { JoinQueue = true, LeaveQueue = true, BackToMenu = true }
+local MAX_SEAT = 16
 local RESEND_SECONDS = 2 -- clients that connected late still learn their status
 
 function SessionService.new(deps: Deps): any
@@ -173,6 +175,22 @@ function SessionService.backToMenu(self: any, userId: number)
 	return result(true)
 end
 
+-- ScoutPlot: the player is looking at the plot of `seat` (or back at their own with nil), so the server
+-- streams that plot, and any fight on it, to them (D-89).
+function SessionService.scoutPlot(self: any, userId: number, args: any)
+	if self.status[userId] ~= "InMatch" or not self.run then
+		return result(false, "NotInMatch")
+	end
+	local seat = if type(args) == "table" then args.seat else nil
+	if seat ~= nil and (type(seat) ~= "number" or seat ~= math.floor(seat) or seat < 1 or seat > MAX_SEAT) then
+		return result(false, "BadArgs")
+	end
+	if self.deps.focusPlot then
+		self.deps.focusPlot(userId, seat)
+	end
+	return result(true)
+end
+
 -- Handles a client action: menu actions here, everything else goes to the running match's router.
 function SessionService.handle(self: any, userId: number, name: string, args: any): any
 	if MENU_ACTIONS[name] then
@@ -182,6 +200,9 @@ function SessionService.handle(self: any, userId: number, name: string, args: an
 			return self:leave(userId)
 		end
 		return self:backToMenu(userId)
+	end
+	if name == "ScoutPlot" then
+		return self:scoutPlot(userId, args)
 	end
 	local run = self.run
 	if run and self.status[userId] == "InMatch" then

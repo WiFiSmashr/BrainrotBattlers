@@ -82,4 +82,28 @@ return function(t)
 		end
 		t.truthy(found)
 	end)
+
+	t.test("during Combat the scoreboard says whose plot each player's fight is on (D-89)", function()
+		local clock = { t = 0 }
+		local match = MatchService.new({
+			lobbySize = 2, seed = 8, now = function() return clock.t end,
+			combat = function(): any
+				return { winner = "draw", survivors = 0, seconds = 5 }
+			end,
+		})
+		match:addPlayer(1, "A")
+		match:addPlayer(2, "B")
+		match:start()
+		clock.t = 3
+		match:update() -- Prep: no fights yet
+		for _, p in Snapshot.build(match, 1).players do
+			t.eq(p.host, nil)
+		end
+		clock.t = 24
+		match:update() -- 1-1 is a PvE round: each player fights on their own plot
+		t.eq(match.phase, "Combat")
+		for _, p in Snapshot.build(match, 1).players do
+			t.eq(p.host, p.id)
+		end
+	end)
 end

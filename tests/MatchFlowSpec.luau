@@ -333,7 +333,7 @@ return function(t)
 		t.truthy(#toasts >= 8, "rejections must toast")
 
 		advanceTo(match, clock, 24) -- Combat
-		t.eq(router:handle(1, "MoveUnit", { unitUid = 1, dest = { kind = "bench", index = 2 } }).reason, "WrongPhase")
+		t.eq(router:handle(1, "MoveUnit", { unitUid = 1, dest = { kind = "board", col = 1, row = 1 } }).reason, "NoFieldInCombat")
 	end)
 
 	t.test("legal intents work and flag state dirty", function()
@@ -425,16 +425,21 @@ return function(t)
 		for _, u in p.units do
 			unitUid = u.uid
 		end
+		-- Still Prep-only: augments. Items can be equipped and combined mid-fight, but not taken off (D-87).
 		for _, case in {
-			{ "MoveUnit", { unitUid = unitUid, dest = { kind = "bench", index = 9 } } },
-			{ "SellUnit", { unitUid = unitUid } },
-			{ "EquipItem", { itemUid = 1, unitUid = unitUid } },
-			{ "UnequipItem", { itemUid = 1 } },
-			{ "CombineItems", { itemUidA = 1, itemUidB = 2 } },
 			{ "PickAugment", { index = 1 } },
 			{ "RerollAugment", {} },
 		} do
 			t.eq(router:handle(1, case[1], case[2]).reason, "WrongPhase", case[1])
+		end
+		t.eq(router:handle(1, "UnequipItem", { itemUid = 1 }).reason, "NoUnequipInCombat")
+		for _, case in {
+			{ "MoveUnit", { unitUid = unitUid, dest = { kind = "bench", index = 9 } } },
+			{ "SellUnit", { unitUid = unitUid } },
+			{ "EquipItem", { itemUid = 1, unitUid = unitUid } },
+			{ "CombineItems", { itemUidA = 1, itemUidB = 2 } },
+		} do
+			t.truthy(router:handle(1, case[1], case[2]).reason ~= "WrongPhase", case[1] .. " is allowed mid-fight")
 		end
 	end)
 

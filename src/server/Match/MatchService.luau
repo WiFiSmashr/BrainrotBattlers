@@ -275,11 +275,13 @@ local function enterCombat(self: any, at: number)
 	end
 	local info = self.info
 	local pending: { Pending } = {}
+	self.fightHost = {} :: { [number]: number } -- player -> whose plot their fight is played on (scouting, D-89)
 	local longest = 1
 
 	if info.type == "pve" then
 		for _, id in Match.livingIds(self) do -- PAIR-04
 			local home = self.players[id]
+			self.fightHost[id] = id
 			local outcome = runFight(self, {
 				kind = "pve", home = home, away = nil, monsters = PveBoards.count(info.global),
 				globalRound = info.global, seed = Rng.hash(self.deps.seed, info.global, id),
@@ -295,6 +297,10 @@ local function enterCombat(self: any, at: number)
 				self.lastOpponent[fight.away] = fight.home
 			end
 			local home = self.players[fight.home]
+			self.fightHost[fight.home] = fight.home
+			if not fight.ghost then
+				self.fightHost[fight.away] = fight.home
+			end
 			local outcome = runFight(self, {
 				kind = if fight.ghost then "ghost" else "pvp", home = home, away = self.players[fight.away],
 				monsters = 0, globalRound = info.global, seed = Rng.hash(self.deps.seed, info.global, fight.home),

@@ -48,6 +48,7 @@ local CombatWorld = {}
 
 export type View = {
 	handle: (batch: { any }) -> (),
+	unitAt: (position: Vector2) -> number?, -- which of your board units is under a screen position during the fight (D-88)
 	setActive: (active: boolean) -> (),
 	setSuspended: (suspended: boolean) -> (), -- hide the fight view while the player scouts another board (D-84)
 }
@@ -56,6 +57,7 @@ export type View = {
 function CombatWorld.build(): View
 	local huds: { [number]: Hud } = {}
 	local teamOf: { [number]: string } = {}
+	local startCell: { [number]: { col: number, row: number } } = {} -- arena cell each unit began the fight on
 	local latest: { [number]: { hp: number?, mana: number? } } = {} -- last known values, for bars still loading
 	local fightToken = 0 -- changes with each fight so late-loading bars from an old one are dropped
 	local origin: Vector3? = nil
@@ -189,6 +191,7 @@ function CombatWorld.build(): View
 		if ev.e == "Roster" then
 			clearHuds()
 			table.clear(teamOf)
+			table.clear(startCell)
 			table.clear(latest)
 			fightToken += 1
 			warnedMissing = false
@@ -198,6 +201,7 @@ function CombatWorld.build(): View
 			startedAt = StateStore.serverNow()
 			for _, desc in ev.units do
 				teamOf[desc.id] = desc.team
+				startCell[desc.id] = { col = desc.col, row = desc.row }
 				addUnit(desc)
 			end
 			refreshCamera()
@@ -246,7 +250,41 @@ function CombatWorld.build(): View
 		end
 	end
 
+	-- Which of the viewer's board units is nearest a screen position, for tapping or dropping an item on a
+	-- unit that is busy fighting (D-88). Sim units are matched to the player's own units by the cell they
+	-- started the fight on, so no extra data is needed from the server.
+	local PICK_RADIUS = 46 -- pixels at a 1080-high screen
+	local function unitAt(position: Vector2): number?
+		local camera = workspace.CurrentCamera
+		local snapshot = StateStore.snapshot
+		if not active or suspended or not camera or not snapshot then
+			return nil
+		end
+		local mine = if viewerIsHome then "home" else "away"
+		local best: number? = nil
+		local bestDistance = PICK_RADIUS * camera.ViewportSize.Y / 1080
+		for id, hud in huds do
+			local cell = startCell[id]
+			if teamOf[id] == mine and cell and hud.part.Parent then
+				-- The away team is the home layout turned 180 degrees (CMB-02).
+				local col = if viewerIsHome then cell.col else 8 - cell.col
+				local row = if viewerIsHome then cell.row else 9 - cell.row
+				for _, unit in snapshot.units do
+					if unit.c == col and unit.r == row then
+						local point = camera:WorldToScreenPoint(hud.part.Position + Vector3.new(0, hud.height / 2, 0))
+						local distance = (Vector2.new(point.X, point.Y) - position).Magnitude
+						if distance < bestDistance then
+							best, bestDistance = unit.u, distance
+						end
+					end
+				end
+			end
+		end
+		return best
+	end
+
 	return {
+		unitAt = unitAt,
 		handle = function(batch: { any })
 			for _, ev in batch do
 				apply(ev)

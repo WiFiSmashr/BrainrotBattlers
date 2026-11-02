@@ -145,10 +145,6 @@ function CombatPlayback.play(fight: FightTypes.Fight, outcome: FightTypes.Outcom
 	if not replay then
 		return
 	end
-	local awayPlayer = if fight.kind == "pvp" and fight.away then Players:GetPlayerByUserId(fight.away.userId) else nil
-	if not Players:GetPlayerByUserId(fight.home.userId) and not awayPlayer then
-		return -- bot-vs-bot fights are simulated but not drawn
-	end
 	local homeId = fight.home.userId
 	local origin = ArenaLayout.plotOrigin(fight.home.seat)
 	local arena = arenaFolder(homeId, origin)

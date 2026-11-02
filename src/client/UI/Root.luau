@@ -10,6 +10,7 @@ local Components = require(script.Parent.Components)
 local StateStore = require(script.Parent.Parent.StateStore)
 local Selection = require(script.Parent.Selection)
 local DragController = require(script.Parent.DragController)
+local Actions = require(script.Parent.Actions)
 local Feedback = require(script.Parent.Feedback)
 local TopBar = require(script.Parent.TopBar)
 local EconomyBar = require(script.Parent.EconomyBar)
@@ -21,6 +22,7 @@ local AugmentPicker = require(script.Parent.AugmentPicker)
 local CarouselPanel = require(script.Parent.CarouselPanel)
 local IncomePopup = require(script.Parent.IncomePopup)
 local EndScreen = require(script.Parent.EndScreen)
+local BoardStrip = require(script.Parent.BoardStrip)
 local MainMenu = require(script.Parent.MainMenu)
 local ToastLayer = require(script.Parent.ToastLayer)
 local PlotView = require(script.Parent.Parent.View.PlotView)
@@ -61,10 +63,12 @@ function Root.build()
 
 	local plot = PlotView.build()
 	local combat = CombatWorld.build()
+	plot.setCombatPicker(combat.unitAt)
 	local scout = ScoutView.build(root)
+	local boardStrip = BoardStrip.build(root)
 	local panels = {
 		TopBar.build(root), EconomyBar.build(root), ShopPanel.build(root), TraitPanel.build(root), InventoryPanel.build(root),
-		UnitCard.build(root), CarouselPanel.build(root), IncomePopup.build(root), AugmentPicker.build(root), EndScreen.build(root),
+		UnitCard.build(root), boardStrip, CarouselPanel.build(root), IncomePopup.build(root), AugmentPicker.build(root), EndScreen.build(root),
 	}
 	local topBar = panels[1]
 	local always = { panels[1], panels[2], panels[3], panels[4], panels[5] } -- panels that are always on screen once the match runs
@@ -73,6 +77,7 @@ function Root.build()
 	local lastSnapshot: { [string]: any }? = nil
 	local lastPhase = "Lobby"
 	local lastScouting: number? = nil
+	local lastShownSeat: number? = nil
 	local pending = false
 
 	local function renderAll()
@@ -116,6 +121,7 @@ function Root.build()
 			root.BackgroundTransparency = 0
 			combat.setActive(false)
 			combat.setSuspended(false)
+			boardStrip.frame.Visible = false
 			CombatCamera.exit()
 			StateStore.scouting = nil
 			scout.render(nil)
@@ -134,7 +140,8 @@ function Root.build()
 		local who = scout.target(snapshot) -- another player's board being looked at (D-79); allowed in Combat too (D-84)
 		combat.setSuspended(who ~= nil) -- the fight view steps aside while you scout, and returns afterwards
 		if who then
-			CombatCamera.enter(ArenaLayout.plotOrigin(who.seat), true)
+			local scoutOrigin, scoutHome = scout.view(snapshot) -- their own plot, or the plot hosting their fight (D-89)
+			CombatCamera.enter(scoutOrigin or ArenaLayout.plotOrigin(who.seat), scoutHome ~= false)
 		elseif not inCombat then
 			CombatCamera.enter(ArenaLayout.plotOrigin(snapshot.seat), true)
 		end
@@ -142,6 +149,13 @@ function Root.build()
 		plot.render(if who then { units = {}, items = {}, players = snapshot.players, seat = snapshot.seat } else snapshot)
 		scout.render(snapshot)
 		combat.setActive(inCombat)
+		-- Tell the server which plot is on screen, so it streams that plot (and any fight on it) to this client.
+		local shownOrigin = CombatCamera.view()
+		local shownSeat = if shownOrigin then ArenaLayout.seatAt(shownOrigin) else nil
+		if shownSeat ~= lastShownSeat then
+			lastShownSeat = shownSeat
+			Actions.scoutPlot(shownSeat)
+		end
 	end
 
 	StateStore.changed:connect(renderAll)

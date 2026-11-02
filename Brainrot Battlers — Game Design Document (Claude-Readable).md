@@ -204,12 +204,12 @@ Carousel picks use one more action, `PickCarousel(index)` (4.8).
 - At most 4 fights run at once with about 18 units each plus tokens, so under 120 simulated units.
 - Average sim cost MUST stay under 2 ms per fight per frame on the server.
 - A snapshot MUST stay under 4 KB. Send it only when state changed.
-- A client renders only its own arena (and, while scouting, the scouted player's board). Other fights are simulated but not replicated to that client. Plots are 600 studs apart (LOBBY-05).
+- Every fight is simulated and played back in the world (D-89), so a player can scout any fight live. A client shows its own arena, or the board or live fight of the player it is scouting; health bars and damage numbers are sent only to the two players in a fight. Plots are 600 studs apart (LOBBY-05).
 - Target 60 FPS on a mid-range phone during combat.
 
 ## 4. Match structure and flow
 
-A match is a loop of Prep, Combat and Resolve phases grouped into stages, and it ends when one player remains. Players can move, sell, equip and combine only during Prep; the shop actions (buy, reroll, buy XP, lock) also work during Combat (D-58).
+A match is a loop of Prep, Combat and Resolve phases grouped into stages, and it ends when one player remains. Boards can be changed and items taken off only during Prep. During Combat players can still use the shop (buy, reroll, buy XP, lock), rearrange and sell units on the bench, sell board units, and equip and combine items (D-58, D-87); the fight is already decided, so these take effect from the next round.
 
 ### 4.1 Match flow
 
@@ -470,7 +470,7 @@ Health = costHealth \times archetypeHealth \times 1.8^{(star - 1)} \qquad AD = c
 ### 7.5 Board, bench and sell rules
 
 - **BRD-01.** The board is 7 columns by 4 rows for each player. The bench has 9 slots `[CONFIG]`.
-- **BRD-02.** Units move between board, bench and sell zone only during Prep. Moves are validated server-side. In the 3D view, dragging a unit onto the shop panel sells it (D-67).
+- **BRD-02.** Units move between board, bench and sell zone during Prep. During Combat only the bench can be rearranged: units cannot be fielded or pulled off the board, but any unit can be sold (D-87). Moves are validated server-side. In the 3D view, dragging a unit onto the shop panel sells it (D-67).
 - **BRD-03.** Dropping a unit on an occupied cell swaps the two units.
 - **BRD-04.** The server rejects a move to the board if the board already holds a number of units equal to the player level, unless it is a swap.
 - **BRD-05.** (D-75.) When Prep ends, before combat is simulated, any free board slots (up to the player level) are filled from the bench, leftmost bench slot first. Melee units go to the front rows and ranged units to the back rows, centre columns first. Units already on the board never move.
@@ -599,7 +599,7 @@ Players collect 6 kinds of basic components, each boosting one stat. Fusing any 
 ### 9.1 Item rules
 
 - **ITM-01.** A unit holds at most 3 items, in any mix of components and combined items.
-- **ITM-02.** Items are equipped, unequipped and combined only during Prep. Unequipping returns the item to the inventory.
+- **ITM-02.** Items can be equipped and combined during Prep and Combat, but unequipped only during Prep (D-87). Unequipping returns the item to the inventory. An item on a unit comes off with a click (mouse) or a second tap on the same item (touch) in the unit card.
 - **ITM-03.** Combining: the player drags a component onto another component in the inventory, or taps both and presses Combine. The recipe is order-independent. Both components are consumed. A combined item can NOT be combined again.
 - **ITM-04.** A combined item grants both components' stats plus its effect.
 - **ITM-05.** If a unit holds two copies of the same combined item, their stats stack but their effect does NOT. Only one copy's effect is active.
@@ -862,7 +862,7 @@ The UI is a thin, phone-friendly view of server state: it renders what the serve
 | Combat view | The 3D arena seen from the fixed camera (CameraConfig), with health and mana bars over units, the items each unit carries, damage numbers, status icons, and a fight timer. The shop, economy bar and bench stay usable (D-58). |
 | End screen | Placement, stats, and a Back to Menu button (D-70). |
 | Main menu | Title, a Play / Cancel button, the queue count ("In queue 2 / 4"), the start countdown and a note when a match is already running (LOBBY-04). Shown whenever the player is not in a match. |
-| Scout banner | While you look at another player's board (available in every phase, including Combat, D-84): whose board it is and a My board button. Boards, benches and loose items are public; gold and shops are not (D-79, D-83). While scouting, the item panel shows their loose items. |
+| Scout banner | While you look at another player's board (available in every phase; during Combat you watch that player's live fight, D-84, D-89): whose board it is and a My board button. Boards, benches and loose items are public; gold and shops are not (D-79, D-83). While scouting, the item panel shows their loose items. |
 | Carousel panel | Shows the shared offerings, whose turn it is, and a pick timer. Picked offerings are greyed out with the picker's name. |
 
 ### 12.3 Interactions
@@ -874,7 +874,7 @@ The UI is a thin, phone-friendly view of server state: it renders what the serve
 | Sell a unit | Drag it onto the shop panel | Open the info card, then tap Sell |
 | Equip an item | Drag the item onto a unit | Tap the item, then tap the unit |
 | Combine components | Drag one onto the other | Tap one, tap the other, press Combine |
-| Unequip an item | Drag it off the unit | Open the info card, tap the item, then tap Take off (D-56) |
+| Unequip an item | Drag it off the unit onto the item panel | Open the info card, then click the item (mouse) or tap it twice (touch; the first tap shows what it does). Not during Combat (D-87) |
 | Scout a player | Click their card in the top bar | Same; click it again, or press My board, to return (D-79) |
 | Queue for a match | Press Play in the main menu | Same (LOBBY-04) |
 

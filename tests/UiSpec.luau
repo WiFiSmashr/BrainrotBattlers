@@ -15,7 +15,7 @@ local Units = require(Shared.Data.Units)
 -- Every reason code the server services and ActionRouter can return.
 local REASONS = {
 	"NotEnoughGold", "BenchFull", "BoardFull", "EmptySlot", "WrongPhase", "UnknownUnit", "UnknownItem", "ItemEquipped",
-	"NotEquipped", "UnitFull", "CannotCombine", "MaxLevel", "OutOfBounds", "NotYourTurn", "NoOffer", "AlreadyRerolled",
+	"NoUnequipInCombat", "NoFieldInCombat", "NotEquipped", "UnitFull", "CannotCombine", "MaxLevel", "OutOfBounds", "NotYourTurn", "NoOffer", "AlreadyRerolled",
 	"BadArgs", "RateLimited", "NotInMatch", "UnknownAction",
 }
 

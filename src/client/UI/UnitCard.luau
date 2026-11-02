@@ -14,6 +14,8 @@ local UnitPortrait = require(script.Parent.UnitPortrait)
 local Selection = require(script.Parent.Selection)
 local DragController = require(script.Parent.DragController)
 local ItemIcon = require(script.Parent.ItemIcon)
+local StateStore = require(script.Parent.Parent.StateStore)
+local UserInputService = game:GetService("UserInputService")
 
 local UnitCard = {}
 
@@ -123,12 +125,34 @@ function UnitCard.build(parent: Instance): View
 		line(def.ability.description, 18, 6)
 		line(effectLines(def, unit.s), 16, 7, Theme.colors.textDim)
 
-		-- Equipped items: tap one to unequip it, or drag it onto the item panel.
+		-- Equipped items come off with a click, or on touch with a second tap on the same item (the first tap
+		-- shows what it does; with a mouse, hovering does). Not during Combat (D-87). Dragging one onto the
+		-- item panel also takes it off.
 		for _, item in snapshot.items do
 			if item.e == unit.u then
 				local icon = ItemIcon.tile(itemsRow, item.i, 76)
+				if Selection.inspected == item.u then
+					local ring = Instance.new("UIStroke")
+					ring.Color = Theme.colors.accent
+					ring.Thickness = 4
+					ring.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+					ring.Parent = icon
+				end
+				icon.MouseEnter:Connect(function()
+					if UserInputService:GetLastInputType() ~= Enum.UserInputType.Touch and Selection.inspected ~= item.u then
+						Selection.inspectItem(item.u)
+					end
+				end)
 				DragController.attach(icon, { kind = "equipped", uid = item.u }, function()
-					Selection.inspectItem(item.u) -- shows its effects; "Take off" is in the item panel
+					local touch = UserInputService:GetLastInputType() == Enum.UserInputType.Touch
+					if touch and Selection.inspected ~= item.u then
+						Selection.inspectItem(item.u) -- first tap: show it
+					elseif StateStore.phase.name == "Combat" then
+						StateStore.toast:fire("NoUnequipInCombat")
+					else
+						Actions.unequipItem(item.u)
+						Selection.inspectItem(nil)
+					end
 				end)
 			end
 		end

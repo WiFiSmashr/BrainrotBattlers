@@ -59,8 +59,8 @@ local function newRun(): SessionService.Run
 		lobbySize = GameConfig.lobbySize,
 		seed = Random.new():NextInteger(1, 2147483646), -- match seed is chosen once, outside the simulation
 		combat = function(fight)
-			-- Only fights with a human in them are recorded for playback; bot-vs-bot fights are just simulated.
-			return CombatRunner.simulate(fight, fight.home.userId > 0 or (fight.away ~= nil and fight.away.userId > 0))
+			-- Every fight is recorded and played back so any of them can be scouted live (D-89).
+			return CombatRunner.simulate(fight, true)
 		end,
 		onFight = CombatPlayback.play,
 		incomeModifiers = EffectRunner.incomeModifiers,
@@ -95,6 +95,29 @@ session = SessionService.new({
 	end,
 	onCleanup = function()
 		CombatPlayback.clearPlots()
+	end,
+	-- A player scouting a plot has the server stream it to them; with no seat they go back to their own plot (D-89).
+	focusPlot = function(userId, seat)
+		local run = session:currentRun()
+		local player = Players:GetPlayerByUserId(userId)
+		if not run or not player then
+			return
+		end
+		local wanted = seat
+		if wanted == nil then
+			local own = run.match:getPlayer(userId)
+			wanted = if own then own.seat else nil
+		end
+		for id, state in run.match.players do
+			if state.seat == wanted then
+				local arenas = workspace:FindFirstChild("Arenas")
+				local arena = if arenas then arenas:FindFirstChild("Arena_" .. id) else nil
+				local floor = if arena then arena:FindFirstChild("Floor") else nil
+				if floor and floor:IsA("BasePart") then
+					player.ReplicationFocus = floor
+				end
+			end
+		end
 	end,
 	notify = function(userId, info)
 		local player = Players:GetPlayerByUserId(userId)

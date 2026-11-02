@@ -25,8 +25,9 @@ local PREP = { Prep = true }
 local SHOP_PHASES = { Prep = true, Combat = true }
 local ACTION_PHASES: { [string]: { [string]: boolean } } = {
 	BuyUnit = SHOP_PHASES, RerollShop = SHOP_PHASES, BuyXP = SHOP_PHASES, ToggleLock = SHOP_PHASES,
-	MoveUnit = PREP, SellUnit = PREP,
-	EquipItem = PREP, UnequipItem = PREP, CombineItems = PREP, PickAugment = PREP, RerollAugment = PREP,
+	-- During Combat (D-87): bench units can be rearranged and sold, items can be equipped and combined.
+	MoveUnit = SHOP_PHASES, SellUnit = SHOP_PHASES,
+	EquipItem = SHOP_PHASES, UnequipItem = PREP, CombineItems = SHOP_PHASES, PickAugment = PREP, RerollAugment = PREP,
 	PickCarousel = { Carousel = true },
 }
 
@@ -95,6 +96,13 @@ local function dispatch(self: any, userId: number, state: PlayerState.State, nam
 		if not isInt(args.unitUid) or not dest then
 			return BAD_ARGS
 		end
+		if match.phase == "Combat" then
+			-- Mid-fight only the bench can be rearranged: nothing is fielded or pulled off the board (D-87).
+			local unit = state.units[args.unitUid]
+			if dest.kind ~= "bench" or (unit and unit.board) then
+				return { ok = false, reason = "NoFieldInCombat" }
+			end
+		end
 		return PlayerState.moveUnit(state, args.unitUid, dest)
 	elseif name == "SellUnit" then
 		if not isInt(args.unitUid) then
@@ -148,7 +156,7 @@ function ActionRouter.handle(self: any, userId: number, name: any, args: any): R
 	elseif not match:isAlive(userId) then
 		result = { ok = false, reason = "NotInMatch" }
 	elseif not ACTION_PHASES[name][match.phase] then
-		result = { ok = false, reason = "WrongPhase" }
+		result = { ok = false, reason = if name == "UnequipItem" and match.phase == "Combat" then "NoUnequipInCombat" else "WrongPhase" }
 	else
 		result = dispatch(self, userId, match:getPlayer(userId), name, if type(args) == "table" then args else {})
 	end
