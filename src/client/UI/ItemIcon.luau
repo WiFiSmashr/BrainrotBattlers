@@ -50,10 +50,10 @@ function ItemIcon.tile(parent: Instance, itemId: string, size: number): TextButt
 		Size = UDim2.fromOffset(size, size), Text = "", AutoButtonColor = false, Parent = parent, radius = 8, ZIndex = 3,
 	})
 	paint(tile, itemId)
-	Components.label({
+	Components.fitText(Components.label({
 		Size = UDim2.new(1, -4, 1, -4), Position = UDim2.fromOffset(2, 2), Text = ItemIcon.name(itemId), TextSize = 16,
 		TextWrapped = true, TextColor3 = Color3.new(0, 0, 0), Parent = tile, ZIndex = 4,
-	})
+	}), 16, 8)
 	return tile
 end
 

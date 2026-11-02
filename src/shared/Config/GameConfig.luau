@@ -33,6 +33,7 @@ local GameConfig = {
 	resolveSeconds = 4,
 	carouselIntroSeconds = 3,
 	carouselPickSeconds = 10,
+	carouselEndSeconds = 1.5, -- how long the finished carousel stays up after the last pick, so it can be seen (D-86)
 
 	-- Lobby start (D-17): start when full, or after the wait with at least minPlayersToStart.
 	lobbyWaitSeconds = 10,

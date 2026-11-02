@@ -13,6 +13,7 @@ export type Carousel = {
 	order: { number }, -- userIds, lowest health first (CAR-03)
 	turn: number, -- index into `order`; 0 once everyone has picked
 	turnEndsAt: number,
+	finishedAt: number?, -- when the last player picked
 	players: { [number]: PlayerState.State },
 	rng: any,
 }
@@ -66,6 +67,9 @@ local function take(c: Carousel, userId: number, index: number, at: number)
 	offering.pickedBy = userId
 	InventoryService.addItem(c.players[userId], offering.itemId)
 	c.turn = if c.turn >= #c.order then 0 else c.turn + 1
+	if c.turn == 0 then
+		c.finishedAt = at -- everyone has picked; the match may end the phase early (D-86)
+	end
 	c.turnEndsAt = at + GameConfig.carouselPickSeconds
 end
 

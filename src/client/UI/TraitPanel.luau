@@ -136,12 +136,12 @@ function TraitPanel.build(parent: Instance): View
 			})
 			if isOpen then
 				for i, tier in trait.tiers do
-					Components.label({
+					Components.fitText(Components.label({
 						Size = UDim2.new(1, -16, 0, 48), Position = UDim2.fromOffset(8, 72 + (i - 1) * 52), TextWrapped = true, TextSize = 15,
 						Text = ("(%d) %s"):format(tier.count, tier.description), Font = Theme.fontBody, TextXAlignment = Enum.TextXAlignment.Left,
 						TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = if i == row.state.tierIndex then Theme.colors.accent else Theme.colors.textDim,
 						Parent = card,
-					})
+					}), 15, 9)
 				end
 				-- Who has this trait: small portraits under the effects, dimmed unless on your board.
 				local gridTop = 72 + #trait.tiers * 52

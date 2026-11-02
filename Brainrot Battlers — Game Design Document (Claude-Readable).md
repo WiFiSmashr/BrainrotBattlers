@@ -289,7 +289,7 @@ The carousel is a shared item pick in the middle of each stage: round 1-3 in sta
 - **CAR-02.** The server rolls one offering per living player. Each offering is one random component. All 6 component types appear before any repeats.
 - **CAR-03.** Players pick one at a time in ascending order of current health, with random ties, so trailing players choose first. Each pick has 10 seconds `[CONFIG]` (D-84). On timeout the server picks a random remaining offering. Bots pick instantly.
 - **CAR-04.** All players see the offerings and each pick live. A picked item goes straight to that player's inventory.
-- **CAR-05.** The phase lasts a 3 second intro plus 10 seconds per living player, at most 83 seconds in an 8-player lobby (D-84).
+- **CAR-05.** The phase lasts at most a 3 second intro plus 10 seconds per living player, 83 seconds in an 8-player lobby (D-84). Once every living player has picked, the phase ends 1.5 seconds after the last pick (D-86).
 - **CAR-06.** Picks use the `PickCarousel(index)` action. The server accepts it only from the player whose turn it is (ARCH-01).
 - **CAR-07.** `CarouselService` MUST keep offering contents and turn order on the server and replicate them in `StateUpdate`.
 

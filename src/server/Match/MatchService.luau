@@ -389,9 +389,6 @@ end
 -- Runs every transition whose deadline has passed. Call this often (e.g. every 0.1s).
 function Match.update(self: any)
 	local now = self.deps.now()
-	while self.endsAt and now >= self.endsAt and self.phase ~= "MatchEnd" do
-		advance(self, self.endsAt)
-	end
 	if self.phase == "Carousel" and self.carousel then
 		-- Picks that timed out are made for the player (CAR-03); everyone sees them live (CAR-04).
 		local before = CarouselService.currentPlayer(self.carousel)
@@ -399,6 +396,15 @@ function Match.update(self: any)
 		if CarouselService.currentPlayer(self.carousel) ~= before then
 			Match.markAllDirty(self)
 		end
+		-- Once everyone has picked the carousel ends shortly after, instead of waiting out the clock (D-86).
+		local finishedAt = self.carousel.finishedAt
+		if finishedAt and self.endsAt and finishedAt + GameConfig.carouselEndSeconds < self.endsAt then
+			self.endsAt = finishedAt + GameConfig.carouselEndSeconds
+			Match.markAllDirty(self) -- the countdown the clients show changed
+		end
+	end
+	while self.endsAt and now >= self.endsAt and self.phase ~= "MatchEnd" do
+		advance(self, self.endsAt)
 	end
 end
 

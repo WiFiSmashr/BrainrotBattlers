@@ -3,6 +3,7 @@
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Server = game:GetService("ServerScriptService"):WaitForChild("Server")
+local GameConfig = require(Shared.Config.GameConfig)
 local Items = require(Shared.Data.Items)
 local Rng = require(Shared.Util.Rng)
 local PlayerState = require(Server.Player.PlayerState)
@@ -227,6 +228,44 @@ return function(t)
 			t.eq(itemCount(match:getPlayer(id)), 1, "player " .. id)
 			t.eq(match:getPlayer(id).health, id == 1 and 40 or (id == 2 and 10 or 70))
 		end
+	end)
+
+	t.test("the carousel ends shortly after the last player picks, not when the clock runs out (D-86)", function()
+		local match, clock = harness(2)
+		clock.t = 67 -- 2 players: carousel 66..89 at most
+		match:update()
+		t.eq(match.phase, "Carousel")
+		local router = ActionRouter.new(match, function() return clock.t end)
+		local first = match.carousel.order[1]
+		local second = match.carousel.order[2]
+		t.eq(router:handle(first, "PickCarousel", { index = 1 }).ok, true)
+		clock.t = 68
+		match:update()
+		t.eq(match.phase, "Carousel", "one player is still to pick")
+		t.eq(router:handle(second, "PickCarousel", { index = 2 }).ok, true)
+		clock.t = 69
+		match:update()
+		t.eq(match.phase, "Carousel", "the finished carousel stays up briefly")
+		t.near(match.endsAt, 68 + GameConfig.carouselEndSeconds, 1e-6)
+		clock.t = 68 + GameConfig.carouselEndSeconds + 0.1
+		match:update()
+		t.eq(match.phase, "Prep")
+		t.eq(match.carousel, nil)
+		for id = 1, 2 do
+			t.eq(itemCount(match:getPlayer(id)), 1, "player " .. id)
+		end
+	end)
+
+	t.test("a carousel where nobody picks still lasts the full 3s + 10s per player", function()
+		local match, clock = harness(2)
+		clock.t = 67
+		match:update()
+		clock.t = 88
+		match:update()
+		t.eq(match.phase, "Carousel")
+		clock.t = 89.1
+		match:update()
+		t.eq(match.phase, "Prep")
 	end)
 
 	t.test("the carousel is replicated in the snapshot with offerings, turn and picker (CAR-07)", function()

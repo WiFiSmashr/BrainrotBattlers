@@ -73,12 +73,12 @@ function AugmentPicker.build(parent: Instance): View
 				stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 				stroke.Parent = card
 				Components.panel({ Size = UDim2.new(1, 0, 0, 14), BackgroundColor3 = color, radius = 6, ZIndex = 53, Parent = card })
-				Components.label({ Size = UDim2.new(1, -24, 0, 80), Position = UDim2.fromOffset(12, 34), Text = def.name, TextSize = 36, TextWrapped = true, ZIndex = 53, Parent = card })
+				Components.fitText(Components.label({ Size = UDim2.new(1, -24, 0, 80), Position = UDim2.fromOffset(12, 34), Text = def.name, TextSize = 36, ZIndex = 53, Parent = card }), 36, 18)
 				Components.label({ Size = UDim2.new(1, -24, 0, 36), Position = UDim2.fromOffset(12, 118), Text = ("%s  -  %s"):format(def.rarity, table.concat(def.categories, " + ")), TextSize = 22, TextColor3 = color, ZIndex = 53, Parent = card })
-				Components.label({
-					Size = UDim2.new(1, -28, 0, 300), Position = UDim2.fromOffset(14, 170), Text = def.description, TextSize = 26, TextWrapped = true, Font = Theme.fontBody,
+				Components.fitText(Components.label({
+					Size = UDim2.new(1, -28, 0, 300), Position = UDim2.fromOffset(14, 170), Text = def.description, TextSize = 26, Font = Theme.fontBody,
 					TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, ZIndex = 53, Parent = card,
-				})
+				}), 26, 14)
 			else
 				local tile = ItemIcon.tile(cards, id, 190)
 				tile.ZIndex = 52

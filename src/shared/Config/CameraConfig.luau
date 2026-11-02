@@ -5,8 +5,8 @@
 
 local CameraConfig = {
 	fieldOfView = 70, -- degrees, vertical
-	distance = 58, -- studs from the arena centre to the camera
-	pitchDegrees = 60, -- how far the camera looks down
+	distance = 50, -- studs from the arena centre to the camera
+	pitchDegrees = 40, -- how far the camera looks down
 	lookHeight = 2, -- height of the point the camera aims at (the tile tops are at y = 1)
 	-- Panels cover the bottom of the screen, so the camera is tilted down this much to show the arena in
 	-- the free area between the top bar and the bench.

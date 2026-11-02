@@ -63,6 +63,18 @@ function Components.label(props: { [string]: any }): TextLabel
 	return Components.create("TextLabel", p)
 end
 
+-- Makes a wrapped label shrink its text to fit its box, between `maxSize` and `minSize` points, so long text
+-- is never cut off at any screen size (D-85). Give the label a fixed size; do not combine with AutomaticSize.
+function Components.fitText(label: TextLabel, maxSize: number, minSize: number): TextLabel
+	label.TextScaled = true
+	label.TextWrapped = true
+	local constraint = Instance.new("UITextSizeConstraint")
+	constraint.MaxTextSize = maxSize
+	constraint.MinTextSize = minSize
+	constraint.Parent = label
+	return label
+end
+
 -- A tappable button. `onTap` runs on tap or click. Touch targets are never smaller than 44 x 44
 -- reference pixels (UI-03).
 function Components.button(props: { [string]: any }): TextButton

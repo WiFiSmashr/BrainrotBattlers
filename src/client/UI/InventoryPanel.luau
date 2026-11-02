@@ -49,11 +49,11 @@ function InventoryPanel.build(parent: Instance): View
 		Size = UDim2.new(1, -12, 0, 32), Position = UDim2.fromOffset(8, 4), TextSize = 24, TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = Theme.colors.accent, Parent = detail,
 	})
-	local detailBody = Components.scroll({ Size = UDim2.new(1, -8, 1, -94), Position = UDim2.fromOffset(4, 38), Parent = detail })
-	local detailText = Components.label({
-		Size = UDim2.new(1, -12, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextSize = 17, TextWrapped = true, Font = Theme.fontBody,
-		TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, Parent = detailBody,
-	})
+	-- The text shrinks to fit this box (never below 11 points) instead of being cut off or needing a scroll (D-85).
+	local detailText = Components.fitText(Components.label({
+		Size = UDim2.new(1, -16, 1, -94), Position = UDim2.fromOffset(8, 38), TextSize = 18, Font = Theme.fontBody,
+		TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, Parent = detail,
+	}), 18, 11)
 	local takeOff = Components.button({
 		Size = UDim2.new(1, -12, 0, 48), AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 6, 1, -6), Text = "Take off", TextSize = 22,
 		Visible = false, Parent = detail,
